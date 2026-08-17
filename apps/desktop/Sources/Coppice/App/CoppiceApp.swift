@@ -97,6 +97,15 @@ struct MenuBarLabel: View {
                     .font(.system(size: 11, weight: .medium))
             }
         }
+        // Without this VoiceOver reads the item as "Cut", the system name of the
+        // scissors symbol, which says nothing about what the item is or does.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Coppice")
+        .accessibilityValue(
+            shouldShowSize
+                ? "\(Format.bytes(model.reclaimableBytes)) reclaimable"
+                : "No reclaimable space"
+        )
     }
 }
 

@@ -16,9 +16,12 @@ final class Log: @unchecked Sendable {
     private let maxBytes: Int64 = 2 * 1024 * 1024
 
     private init() {
+        // Per channel, not per app. Stable, Nightly and Dev install side by side
+        // and must not share state: a shared directory means Nightly's log
+        // overwrites Stable's, and uninstalling one wipes the other's history.
         let support = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appending(path: "Coppice")
+            .appending(path: Channel.current.displayName)
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         fileURL = support.appending(path: "activity.log")
     }

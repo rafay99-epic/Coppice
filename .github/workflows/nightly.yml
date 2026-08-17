@@ -98,5 +98,9 @@ jobs:
             echo "::warning::TAP_TOKEN not set — skipping cask bump."
             exit 0
           fi
-          VERSION="$VERSION" CASK=coppice-nightly \
+          # The cask version is the CI build number, not the commit count.
+          # Nightly publishes to one rolling tag, and several nightly builds can
+          # share a commit count — so using it would leave the cask version
+          # unchanged and Homebrew would never offer the upgrade.
+          VERSION="$BUILD" CASK=coppice-nightly \
             bash "$GITHUB_WORKSPACE/.github/scripts/bump-cask.sh" "$PWD/build/Coppice-Nightly.dmg"
