@@ -32,7 +32,7 @@
 	<key>NSSupportsSuddenTermination</key>
 	<false/>
 	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Syntax Lab Technology. Licensed under GPL-3.0.</string>
+	<string>© 2026 Syntax Lab Technology. Licensed under the MIT License.</string>
 	<key>CoppiceChannel</key>
 	<string>stable</string>
 </dict>

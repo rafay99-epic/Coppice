@@ -218,7 +218,7 @@ private struct AboutSettings: View {
 
             Spacer()
 
-            Text("GPL-3.0 · Syntax Lab Technology")
+            Text("MIT · Syntax Lab Technology")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }

@@ -1,35 +1,49 @@
 @import "tailwindcss";
 
-@theme {
-  --color-bg: #000000;
-  --color-panel: #070707;
-  --color-elevated: #0d0d0d;
-  --color-line: #1c1c1c;
-  --color-line-strong: #2a2a2a;
+/*
+  Anchored to Linear's dark system: darkness as the native medium, where
+  hierarchy comes from graded white opacity rather than from colour.
 
-  --color-fg: #ffffff;
-  --color-dim: #8f8f8f;
-  --color-faint: #5a5a5a;
+  The page itself is true black. Every surface above it is a white overlay
+  rather than a lighter grey, so panels read as emerging from the black
+  instead of sitting on it as separate boxes.
+
+  One chromatic accent, and it is the app's own green. Everything else is
+  achromatic, which is what makes the accent mean something when it appears.
+*/
+@theme {
+  --color-page: #000000;
+  --color-raise: rgba(255, 255, 255, 0.024);
+  --color-raise-2: rgba(255, 255, 255, 0.045);
+  --color-hair: rgba(255, 255, 255, 0.07);
+  --color-hair-2: rgba(255, 255, 255, 0.13);
+
+  /* Four-step text ladder. Body copy never sits at full white: the contrast
+     between the ladder steps is what carries hierarchy. */
+  --color-ink: #f7f8f8;
+  --color-ink-2: #c9ced6;
+  --color-ink-3: #8a8f98;
+  --color-ink-4: #757b85;
 
   --color-shoot: #3ddc84;
-  --color-caution: #ffc043;
-  --color-block: #ff5c5c;
-  --color-live: #4da6ff;
-  --color-ghost: #b07cff;
+  --color-alarm: #ff6b6b;
 
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:
+    "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 html {
   scroll-behavior: smooth;
-  background: var(--color-bg);
+  background: var(--color-page);
 }
 
 body {
-  background: var(--color-bg);
-  color: var(--color-fg);
+  background: var(--color-page);
+  color: var(--color-ink);
   font-family: var(--font-sans);
+  font-feature-settings: "cv01", "ss03";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -39,10 +53,29 @@ body {
   color: #000;
 }
 
-@keyframes reveal-up {
+/* Display type is compressed on purpose. Negative tracking at large sizes is
+   what makes a headline read as engineered rather than merely large. */
+.display {
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+  font-weight: 600;
+}
+
+.display-sm {
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+  font-weight: 600;
+}
+
+/* Numerals in tables and stats must not jitter as they change width. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(18px);
   }
   to {
     opacity: 1;
@@ -50,19 +83,21 @@ body {
   }
 }
 
-/* Scroll reveal, driven by the scroll position itself rather than by script.
-   Opacity and transform only, so it composites on the GPU and never triggers
-   layout.
+/*
+  Scroll reveal driven by scroll position rather than by script.
 
-   The hidden state lives inside @supports on purpose. A browser without
-   scroll-driven animations gets no rule at all and renders the content plainly,
-   so a page that cannot animate is still a page you can read. */
+  The hidden state lives inside @supports deliberately. A browser without
+  scroll-driven animations gets no rule at all and renders the content plainly,
+  so a page that cannot animate is still a page you can read. An
+  IntersectionObserver version would start everything at opacity 0 and show a
+  blank page whenever the script failed.
+*/
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
-    .reveal {
-      animation: reveal-up linear both;
+    .rise {
+      animation: rise linear both;
       animation-timeline: view();
-      animation-range: entry 0% entry 45%;
+      animation-range: entry 0% entry 40%;
     }
   }
 }
