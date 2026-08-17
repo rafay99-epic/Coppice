@@ -120,13 +120,21 @@ struct CoppiceCommands: Commands {
     }
 }
 
-/// Keeps the process alive with no windows open, and gives the app a real menu
-/// bar only while a window is showing.
+/// Keeps the process alive with no windows open.
 ///
-/// A pure accessory app has no menu bar at all, so ⌘R, ⌘, and the About box have
-/// nowhere to live. A regular app shows a permanent Dock icon, which a background
-/// utility has not earned. Switching policy with the window gets both: no Dock
-/// clutter while it sits in the menu bar, a full menu bar once you open it.
+/// The activation policy is set once here and never touched again. An earlier
+/// version toggled between `.accessory` and `.regular` as windows opened and
+/// closed, to get a menu bar without a permanent Dock icon. That crashed 0.6:
+/// changing the policy shows or hides the system menu bar, which changes every
+/// window's safe area, which makes `NSHostingView` schedule a constraints
+/// update. When that landed inside an in-flight layout pass, AppKit threw
+/// "unable to schedule a constraints update" and the uncaught exception killed
+/// the process.
+///
+/// Deferring the change did not help, because the display cycle runs as a
+/// runloop source and `willCloseNotification` fires while a window is still
+/// tearing down. A cosmetic nicety is not worth a hard crash in an app that
+/// deletes files, so the choice is now a setting applied at launch.
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Posted when the app is asked to show itself: launching it again from
     /// Finder or Spotlight, or clicking the Dock icon while a window is open.
@@ -143,42 +151,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // `LSUIElement` makes the app accessory before any code runs, and an
-        // accessory app suppresses the window a scene asked to present at
-        // launch. When a window is expected, start regular and let the observer
-        // below drop back to accessory once it closes.
-        NSApp.setActivationPolicy(AppSettings.presentsWindowAtLaunch ? .regular : .accessory)
+        // Decided once, at launch, and never changed again. See the type comment
+        // above for why toggling this at runtime crashed the app.
+        NSApp.setActivationPolicy(AppSettings.showsDockIcon ? .regular : .accessory)
         Log.shared.write("Coppice \(Updater.currentVersion) (\(Channel.current.rawValue)) launched")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            let described = NSApp.windows.map { "\(type(of: $0)) visible=\($0.isVisible) title=\($0.title)" }
-            Log.shared.write("windows after launch: \(described.isEmpty ? "none" : described.joined(separator: " | "))")
-        }
 
-        for name in [NSWindow.didBecomeKeyNotification, NSWindow.willCloseNotification] {
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(windowVisibilityChanged),
-                name: name,
-                object: nil
-            )
+        installExceptionLogger()
+
+        // First run has nothing in the menu bar worth finding yet, so surface the
+        // onboarding window. Posted on a later runloop turn, well clear of any
+        // layout, because that is the mistake that caused the 0.6 crash.
+        if AppSettings.presentsWindowAtLaunch {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                NotificationCenter.default.post(name: Self.showWindow, object: nil)
+            }
         }
     }
 
-    /// Any ordinary window on screen means regular; none means back to accessory.
-    /// Panels and the status item's own window are excluded, or opening the menu
-    /// would flash a Dock icon.
-    @objc private func windowVisibilityChanged() {
-        DispatchQueue.main.async {
-            let hasWindow = NSApp.windows.contains { window in
-                window.isVisible
-                    && !(window is NSPanel)
-                    && window.canBecomeMain
-                    && !window.className.contains("MenuBarExtra")
-            }
-            let target: NSApplication.ActivationPolicy = hasWindow ? .regular : .accessory
-            guard NSApp.activationPolicy() != target else { return }
-            NSApp.setActivationPolicy(target)
-            if target == .regular { NSApp.activate(ignoringOtherApps: true) }
+    /// Writes the name and reason of an uncaught Objective-C exception to the
+    /// activity log before the process dies.
+    ///
+    /// AppKit turns these into a SIGTRAP with a 700 line crash report whose one
+    /// useful line is the exception reason, and that line is not in the report
+    /// at all. One line in the log beats reading a backtrace.
+    private func installExceptionLogger() {
+        NSSetUncaughtExceptionHandler { exception in
+            Log.shared.write(
+                "UNCAUGHT \(exception.name.rawValue): \(exception.reason ?? "no reason given")"
+            )
         }
     }
 }

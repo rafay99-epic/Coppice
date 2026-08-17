@@ -34,8 +34,17 @@ private struct GeneralSettings: View {
                     }
                 }
                 .disabled(!settings.showSizeInMenuBar)
+                Toggle("Show in Dock and give Coppice a menu bar", isOn: $settings.showsDockIcon)
             } header: {
                 Text("Menu Bar")
+            } footer: {
+                Text("""
+                Takes effect the next time Coppice launches. It is applied once at \
+                startup rather than live, because switching it while running resizes \
+                every open window mid-layout and can crash the app.
+                """)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
