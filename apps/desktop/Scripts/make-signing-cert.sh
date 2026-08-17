@@ -42,9 +42,16 @@ openssl req -x509 -newkey rsa:2048 -nodes \
   -days 3650 -config "$WORK/cert.cnf" 2>/dev/null
 
 PASSWORD="$(openssl rand -base64 24)"
+# Legacy algorithms on purpose. OpenSSL 3 defaults to AES-256-CBC with a
+# SHA-256 MAC, and macOS `security` cannot import that: it fails with
+# "MAC verification failed during PKCS12 import (wrong password?)", which
+# blames the password and sends you looking in the wrong place entirely.
+# These three flags produce a .p12 the system keychain accepts. Harmless on
+# LibreSSL, which is what /usr/bin/openssl is.
 openssl pkcs12 -export \
   -inkey "$WORK/key.pem" -in "$WORK/cert.pem" \
   -out "$WORK/identity.p12" -passout "pass:$PASSWORD" \
+  -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 \
   -name "$NAME" 2>/dev/null
 
 echo
