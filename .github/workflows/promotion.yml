@@ -1,0 +1,70 @@
+name: Promote nightly to stable
+
+# Stable moves only through this workflow. Run it by hand when nightly has been
+# quiet for long enough to trust, which keeps the Stable channel a decision
+# rather than a side effect of merging.
+#
+# The promotion is a squash: main gets one commit per promotion, so the version
+# (commit count) increments once and the release notes are the grouped changelog
+# rather than every intermediate merge.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Show what would be promoted without pushing"
+        type: boolean
+        default: true
+
+concurrency:
+  group: promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Squash nightly into main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Collect the changelog
+        id: changelog
+        run: |
+          git fetch origin nightly:nightly
+          if git diff --quiet main nightly; then
+            echo "::notice::main already matches nightly — nothing to promote."
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "empty=false" >> "$GITHUB_OUTPUT"
+          {
+            echo "## What changed"
+            echo
+            git log --no-merges --pretty="- %s" main..nightly
+          } > /tmp/notes.md
+          echo "--- promotion notes ---"
+          cat /tmp/notes.md
+
+      - name: Promote
+        if: steps.changelog.outputs.empty == 'false' && inputs.dry_run == false
+        run: |
+          git merge --squash nightly
+          git commit --file /tmp/notes.md --edit=false \
+            || { echo "::error::nothing staged after squash"; exit 1; }
+          git push origin main
+          echo "::notice::Promoted nightly → main. CI will build and publish the release."
+
+      - name: Dry run summary
+        if: steps.changelog.outputs.empty == 'false' && inputs.dry_run == true
+        run: |
+          echo "::notice::Dry run. Re-run with dry_run unchecked to promote."
+          cat /tmp/notes.md >> "$GITHUB_STEP_SUMMARY"

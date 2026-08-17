@@ -1,0 +1,61 @@
+included:
+  - apps/desktop/Sources
+  - apps/desktop/Tests
+
+excluded:
+  - apps/desktop/.build
+  - apps/desktop/build
+
+disabled_rules:
+  - trailing_whitespace
+  - todo
+  # Trailing commas on multi-line literals are what Xcode itself produces, and
+  # they keep diffs to one line when an element is appended.
+  - trailing_comma
+  # `String(decoding:as:)` is deliberate: it never fails and substitutes the
+  # replacement character, where `String(bytes:encoding:)` returns nil and would
+  # silently drop a subprocess's entire output on one bad byte.
+  - optional_data_string_conversion
+
+opt_in_rules:
+  - empty_count
+  - explicit_init
+  - first_where
+  - last_where
+  - redundant_nil_coalescing
+  - toggle_bool
+  - unneeded_parentheses_in_closure_argument
+
+line_length:
+  warning: 140
+  error: 200
+  ignores_comments: true
+
+type_body_length:
+  warning: 400
+  error: 600
+
+file_length:
+  warning: 700
+  error: 1000
+
+function_body_length:
+  warning: 80
+  error: 140
+
+cyclomatic_complexity:
+  warning: 18
+  error: 30
+
+identifier_name:
+  min_length: 1
+  excluded: [id, up, ok, fm, to]
+
+nesting:
+  type_level: 3
+
+# Named three-element tuples read better than a struct for a purely local
+# grouping such as (artifacts, artifactBytes, uniqueBytes).
+large_tuple:
+  warning: 3
+  error: 4

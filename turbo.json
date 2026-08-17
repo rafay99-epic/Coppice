@@ -1,0 +1,18 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "tasks": {
+    "build": {
+      "outputs": [".next/**", "!.next/cache/**", "build/**", ".build/release/**"]
+    },
+    "dmg": {
+      "dependsOn": ["build"],
+      "outputs": ["build/Coppice.dmg"]
+    },
+    "lint": {},
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "test": {}
+  }
+}

@@ -1,0 +1,25 @@
+node_modules/
+.turbo/
+.DS_Store
+*.log
+
+# Next.js
+.next/
+out/
+.vercel
+next-env.d.ts
+
+# Swift
+.build/
+.swiftpm/
+apps/desktop/build/
+apps/desktop/Resources/*.icns
+
+# Env
+.env
+.env.local
+.env*.local
+
+# Scratch planning artifact from before the build. Its recommendation (extend
+# Vitals) was superseded by this repo existing, so it stays out of the history.
+worktree-cleanup-plan.html
