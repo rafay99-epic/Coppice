@@ -138,6 +138,33 @@ final class ParsingTests: XCTestCase {
         XCTAssertTrue(saved.contains(.manual))
     }
 
+    // MARK: Launch-time settings
+
+    /// `showsDockIcon` is read two ways: through `@AppStorage` in the UI and
+    /// through a static in the app delegate, which runs before any instance
+    /// exists. A typo in either key string would silently pin the setting to
+    /// false forever, and nothing would fail. This is that check.
+    func testDockIconSettingSharesOneKeyBetweenStaticAndStorage() {
+        let key = "showsDockIcon"
+        let original = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let original {
+                UserDefaults.standard.set(original, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        UserDefaults.standard.set(true, forKey: key)
+        XCTAssertTrue(AppSettings.showsDockIcon, "the static must read the @AppStorage key")
+
+        UserDefaults.standard.set(false, forKey: key)
+        XCTAssertFalse(AppSettings.showsDockIcon)
+
+        UserDefaults.standard.removeObject(forKey: key)
+        XCTAssertFalse(AppSettings.showsDockIcon, "absent means hidden from the Dock")
+    }
+
     // MARK: Override severity
 
     /// Worktrees are scratch space. Refusing forever would make the app useless

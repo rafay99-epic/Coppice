@@ -20,6 +20,13 @@ final class AppSettings: ObservableObject {
     @AppStorage("autoUpdateCheck") var autoUpdateCheck: Bool = true
     /// Rescue gitignored config to a folder before removing a worktree.
     @AppStorage("rescueIgnoredConfig") var rescueIgnoredConfig: Bool = true
+    /// Show a Dock icon and the app menu bar. Off by default: this is a
+    /// background utility and the menu bar item is the way in.
+    ///
+    /// Read only at launch and never re-applied, because changing the activation
+    /// policy while the app is running shows or hides the system menu bar, which
+    /// resizes every window mid-layout. That crashed 0.6.
+    @AppStorage("showsDockIcon") var showsDockIcon: Bool = false
     /// Look up pull request state so a finished branch can be recognised.
     @AppStorage("checkPullRequests") var checkPullRequests: Bool = true
     /// How recently an agent session counts as recent, in hours.
@@ -63,7 +70,16 @@ final class AppSettings: ObservableObject {
     /// Static because both the scene modifier and the app delegate need the same
     /// answer before any instance exists. Reads `UserDefaults` directly for the
     /// same reason.
-    static var presentsWindowAtLaunch: Bool {
+    /// The launch-time reading of `showsDockIcon`, for the app delegate, which
+    /// runs before any instance exists.
+    /// `nonisolated` because the app delegate reads it before the main actor is
+    /// meaningfully established, and it only reads UserDefaults, which is
+    /// thread safe.
+    nonisolated static var showsDockIcon: Bool {
+        UserDefaults.standard.bool(forKey: "showsDockIcon")
+    }
+
+    nonisolated static var presentsWindowAtLaunch: Bool {
         let completed = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
         return !completed || Channel.current == .dev
     }
