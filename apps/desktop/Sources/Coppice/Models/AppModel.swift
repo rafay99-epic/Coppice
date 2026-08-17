@@ -29,20 +29,30 @@ final class AppModel: ObservableObject {
 
     // MARK: - Derived state
 
-    /// Bytes a sweep would free right now. This is the number the menu bar shows.
-    var reclaimableBytes: Int64 {
-        reports.filter { $0.verdict.canSweep }.reduce(0) { $0 + $1.artifactBytes }
+    /// Reports for the harnesses the user chose to see.
+    ///
+    /// Every derived figure is computed from this rather than from `reports`, so
+    /// the headline count can never disagree with the list underneath it. When
+    /// the filter and the totals read from different collections, the UI claims
+    /// "53 worktrees" above a list showing five, which reads as a broken scan.
+    var visibleReports: [WorktreeReport] {
+        reports.filter { settings.enabledHarnesses.contains($0.worktree.harness) }
     }
 
-    var totalBytes: Int64 { reports.reduce(0) { $0 + $1.totalBytes } }
-    var sweepCandidates: [WorktreeReport] { reports.filter { $0.verdict.canSweep && $0.artifactBytes > 0 } }
-    var prunableReports: [WorktreeReport] { reports.filter { $0.verdict == .prunable } }
+    /// Bytes a sweep would free right now. This is the number the menu bar shows.
+    var reclaimableBytes: Int64 {
+        visibleReports.filter { $0.verdict.canSweep }.reduce(0) { $0 + $1.artifactBytes }
+    }
+
+    var totalBytes: Int64 { visibleReports.reduce(0) { $0 + $1.totalBytes } }
+    var sweepCandidates: [WorktreeReport] { visibleReports.filter { $0.verdict.canSweep && $0.artifactBytes > 0 } }
+    var prunableReports: [WorktreeReport] { visibleReports.filter { $0.verdict == .prunable } }
+    var protectedCount: Int { visibleReports.filter { !$0.verdict.canRemove }.count }
     var selectedReport: WorktreeReport? { reports.first { $0.id == selection } }
 
     /// Worktrees grouped by repository, ordered by how much they hold.
     var groups: [(repo: String, harness: Harness, reports: [WorktreeReport])] {
-        let visible = reports.filter { settings.enabledHarnesses.contains($0.worktree.harness) }
-        let grouped = Dictionary(grouping: visible) { $0.worktree.repoName }
+        let grouped = Dictionary(grouping: visibleReports) { $0.worktree.repoName }
         return grouped.map { name, items in
             let sorted = items.sorted {
                 $0.verdict.order == $1.verdict.order
@@ -130,9 +140,9 @@ final class AppModel: ObservableObject {
             }
             self.lastScan = Date()
             self.isScanning = false
-            let blocked = self.reports.filter { !$0.verdict.canRemove }.count
             Log.shared.write(
-                "scan: \(self.reports.count) worktrees, \(blocked) protected, \(self.groups.count) repos"
+                "scan: \(self.visibleReports.count) worktrees, "
+                + "\(self.protectedCount) protected, \(self.groups.count) repos"
             )
             self.measureSizes()
         }

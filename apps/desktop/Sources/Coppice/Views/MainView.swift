@@ -72,14 +72,14 @@ struct MainView: View {
 
     private var subtitle: String {
         let repos = model.groups.count
-        return "\(model.reports.count) across \(repos) repo\(repos == 1 ? "" : "s") · \(Format.bytes(model.totalBytes))"
+        return "\(model.visibleReports.count) across \(repos) repo\(repos == 1 ? "" : "s") · \(Format.bytes(model.totalBytes))"
     }
 
     private var statsRow: some View {
         HStack(spacing: 1) {
             StatTile(value: Format.bytes(model.reclaimableBytes), label: "reclaimable now", tint: Theme.safe)
             StatTile(value: "\(model.sweepCandidates.count)", label: "sweepable worktrees")
-            StatTile(value: "\(model.reports.filter { !$0.verdict.canRemove }.count)", label: "protected", tint: Theme.blocked)
+            StatTile(value: "\(model.protectedCount)", label: "protected", tint: Theme.blocked)
             StatTile(value: "\(model.prunableReports.count)", label: "prunable", tint: Theme.info)
         }
         .background(Theme.line)
@@ -91,7 +91,7 @@ struct MainView: View {
     private var listPane: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                if model.reports.isEmpty {
+                if model.visibleReports.isEmpty {
                     emptyState
                 }
                 ForEach(model.groups, id: \.repo) { group in
@@ -164,9 +164,9 @@ struct MainView: View {
                     .foregroundStyle(Theme.tertiary)
             }
             Spacer()
-            let measured = model.reports.filter(\.measured).count
-            if measured < model.reports.count {
-                Text("sizing \(measured)/\(model.reports.count)")
+            let measured = model.visibleReports.filter(\.measured).count
+            if measured < model.visibleReports.count {
+                Text("sizing \(measured)/\(model.visibleReports.count)")
                     .font(Theme.mono(10))
                     .foregroundStyle(Theme.tertiary)
             }
@@ -174,9 +174,10 @@ struct MainView: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
         .overlay(alignment: .top) {
-            if !model.reports.isEmpty {
+            if !model.visibleReports.isEmpty {
                 ProgressStrip(
-                    fraction: Double(model.reports.filter(\.measured).count) / Double(model.reports.count)
+                    fraction: Double(model.visibleReports.filter(\.measured).count)
+                        / Double(model.visibleReports.count)
                 )
             }
         }

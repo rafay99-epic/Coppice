@@ -68,11 +68,11 @@ struct OnboardingView: View {
 
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 16) {
-            heading("You have \(model.reports.count) worktrees using \(Format.bytes(model.totalBytes)).",
+            heading("You have \(model.visibleReports.count) worktrees using \(Format.bytes(model.totalBytes)).",
                     "Measured on this machine just now, not an example.")
 
             HStack(spacing: 1) {
-                StatTile(value: "\(model.reports.count)", label: "worktrees found")
+                StatTile(value: "\(model.visibleReports.count)", label: "worktrees found")
                 StatTile(value: "\(model.groups.count)", label: "repositories")
                 StatTile(value: Format.bytes(model.reclaimableBytes), label: "in build artifacts", tint: Theme.safe)
             }
@@ -310,7 +310,10 @@ struct OnboardingView: View {
     }
 
     private func finish() {
-        settings.enabledHarnesses = selectedHarnesses.isEmpty ? Set(Harness.allCases) : selectedHarnesses
+        // `.manual` is never detected — it has no directory to find — so it has
+        // to be added explicitly. Without it, every worktree made by hand and
+        // every ordinary repository's own working copy disappears from the list.
+        settings.enabledHarnesses = selectedHarnesses.union([.manual])
         settings.codeRoots = roots
         settings.hasCompletedOnboarding = true
         model.settingsChanged()

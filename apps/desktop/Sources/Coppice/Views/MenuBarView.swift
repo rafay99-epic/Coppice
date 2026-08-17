@@ -12,7 +12,7 @@ struct MenuBarView: View {
             header
             Divider().overlay(Theme.line)
 
-            if model.reports.isEmpty {
+            if model.visibleReports.isEmpty {
                 emptyState
             } else {
                 summary
@@ -77,7 +77,7 @@ struct MenuBarView: View {
             }
 
             HStack(spacing: 14) {
-                metric("\(model.reports.count)", "worktrees")
+                metric("\(model.visibleReports.count)", "worktrees")
                 metric("\(model.groups.count)", "repos")
                 metric(Format.bytes(model.totalBytes), "on disk")
             }

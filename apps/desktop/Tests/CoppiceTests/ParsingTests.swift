@@ -116,6 +116,28 @@ final class ParsingTests: XCTestCase {
         XCTAssertNotNil(ProcessProbe.holder(of: "/w/app", among: holders))
     }
 
+    /// `.manual` has no directory to find, so detection can never report it.
+    /// Onboarding therefore has to add it explicitly — without that, saving the
+    /// detected set hides every hand-made worktree and every ordinary
+    /// repository's own working copy, while the totals still count them.
+    func testManualHarnessIsNeverDetected() throws {
+        let home = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: home.appending(path: ".claude"),
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let detected = Harness.detected(home: home)
+        XCTAssertTrue(detected.contains(.claudeCode))
+        XCTAssertFalse(detected.contains(.manual), "manual has no detect directory")
+        XCTAssertNil(Harness.manual.detectDirectory(home: home))
+
+        // What onboarding saves must still cover manual worktrees.
+        let saved = Set(detected).union([.manual])
+        XCTAssertTrue(saved.contains(.manual))
+    }
+
     // MARK: Config classification
 
     /// The rule that protects secrets must not fire on committed templates.
