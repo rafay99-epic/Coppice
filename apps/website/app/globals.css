@@ -1,48 +1,93 @@
 @import "tailwindcss";
 
+/*
+  The site should look like the app, because the app is the product.
+
+  Coppice is a native macOS window: SF Pro, Apple's dark-mode semantic label
+  colours, soft rounded surfaces, generous row spacing. So the site uses the
+  same vocabulary. No monospace as a texture, no hairline grids, no bordered
+  tiles. Structure comes from space and type size, not from drawing rectangles
+  around things.
+*/
 @theme {
-  --color-bg: #000000;
-  --color-panel: #070707;
-  --color-elevated: #0d0d0d;
-  --color-line: #1c1c1c;
-  --color-line-strong: #2a2a2a;
+  --color-page: #000000;
 
-  --color-fg: #ffffff;
-  --color-dim: #8f8f8f;
-  --color-faint: #5a5a5a;
+  /* Apple's dark-mode surface ladder, the greys the app window itself uses. */
+  --color-surface: #1c1c1e;
+  --color-surface-2: #2c2c2e;
+  --color-surface-3: #3a3a3c;
 
-  --color-shoot: #3ddc84;
-  --color-caution: #ffc043;
-  --color-block: #ff5c5c;
-  --color-live: #4da6ff;
-  --color-ghost: #b07cff;
+  /* Apple's dark-mode label colours. Secondary and tertiary are white with
+     alpha rather than fixed greys, so they sit correctly on any surface. */
+  --color-label: #ffffff;
+  --color-label-2: rgba(235, 235, 245, 0.62);
+  /* Apple's tertiaryLabel is 0.30 alpha, which lands at 2.6:1 on these
+     surfaces and fails AA. Raised until it passes for body text, since the
+     site uses it for real sentences rather than only for chrome. */
+  --color-label-3: rgba(235, 235, 245, 0.54);
 
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* System colours, dark variants. Same ones the app uses for its verdicts. */
+  --color-green: #30d158;
+  /* Two blues. The bright one is for text on dark surfaces; the deep one is
+     for filled buttons, because white on #0a84ff is only 3.65:1. */
+  --color-blue: #4da6ff;
+  --color-blue-solid: #0b6fd4;
+  --color-red: #ff5f55;
+  --color-orange: #ff9f0a;
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Inter", system-ui, sans-serif;
 }
 
 html {
+  background: var(--color-page);
+  /* Smooth scrolling for anchors. Deliberately CSS rather than a scroll
+     hijacking library: those run a requestAnimationFrame loop for the whole
+     life of the page, which is a permanent repaint cost for a cosmetic effect. */
   scroll-behavior: smooth;
-  background: var(--color-bg);
 }
 
 body {
-  background: var(--color-bg);
-  color: var(--color-fg);
+  background: var(--color-page);
+  color: var(--color-label);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
 ::selection {
-  background: var(--color-shoot);
+  background: var(--color-green);
   color: #000;
 }
 
-@keyframes reveal-up {
+/* Apple's marketing type: large, tight, and set in the same face as the app. */
+.title {
+  letter-spacing: -0.028em;
+  line-height: 1.04;
+  font-weight: 600;
+}
+
+.title-2 {
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+  font-weight: 600;
+}
+
+/*
+  Motion. All of it is scroll driven, so it runs off the compositor while the
+  user is actually scrolling and costs nothing when they stop. No JavaScript,
+  no observers, no animation loop idling in the background.
+
+  Every hidden state lives inside @supports on purpose. A browser without
+  scroll-driven animations gets no rule at all and renders everything plainly,
+  so a page that cannot animate is still a page you can read.
+*/
+@keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(28px);
   }
   to {
     opacity: 1;
@@ -50,19 +95,64 @@ body {
   }
 }
 
-/* Scroll reveal, driven by the scroll position itself rather than by script.
-   Opacity and transform only, so it composites on the GPU and never triggers
-   layout.
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(48px) scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 
-   The hidden state lives inside @supports on purpose. A browser without
-   scroll-driven animations gets no rule at all and renders the content plainly,
-   so a page that cannot animate is still a page you can read. */
+@keyframes drift {
+  from {
+    transform: translateY(38px);
+  }
+  to {
+    transform: translateY(-38px);
+  }
+}
+
+@keyframes bloom {
+  from {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
-    .reveal {
-      animation: reveal-up linear both;
+    .rise {
+      animation: rise linear both;
       animation-timeline: view();
-      animation-range: entry 0% entry 45%;
+      animation-range: entry 0% entry 46%;
+    }
+
+    /* For the large pieces: they arrive with a little more travel and a
+       touch of scale, which reads as weight. */
+    .settle {
+      animation: settle linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 62%;
+    }
+
+    /* Slow counter-scroll on decorative layers only. Never on text. */
+    .drift {
+      animation: drift linear both;
+      animation-timeline: view();
+      animation-range: cover;
+    }
+
+    .bloom {
+      animation: bloom linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 60%;
     }
   }
 }

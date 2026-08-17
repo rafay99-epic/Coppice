@@ -2,7 +2,7 @@
 
 Your coding agents create a git worktree per task and never clean up. Coppice finds all of them, works out which are genuinely safe to touch, and reclaims the space without eating uncommitted work or a live session.
 
-Free, open source, Apple Silicon only. It lives in the menu bar and has no Dock icon.
+Free and open source under MIT, Apple Silicon only. It lives in the menu bar and has no Dock icon.
 
 > Coppicing is cutting a tree back to the stump so it regrows. That is the operation: delete the regenerable parts, and one install command brings them back.
 
@@ -21,6 +21,35 @@ brew install --cask rafay99-epic/apps/coppice-nightly
 ```
 
 Prefer a direct download? Grab the [`.dmg`](https://github.com/rafay99-epic/Coppice/releases/latest/download/Coppice.dmg). It is not notarized (no paid Apple Developer account), so **right-click → Open** the first time to get past Gatekeeper. Homebrew is the smoother path.
+
+## The workflow
+
+Coppice is meant to be ignored until it is useful. Nothing here needs a schedule or a cron job.
+
+**1. It watches, it does not poll.** After launch it registers the agent worktree directories and your own code folders with FSEvents and then does nothing. The kernel wakes it only when one of those directories actually changes, and events coalesce, so an install writing a hundred thousand files arrives as a single callback. Idle cost is 0.0% CPU.
+
+**2. A change triggers a scan.** One `git worktree list --porcelain` per repository builds the inventory in about three seconds. Each worktree then gets a verdict from the eleven rules below. The list is usable at this point.
+
+**3. Sizes stream in afterwards.** A background walk measures each worktree one at a time at low priority, stopping at the first artifact directory rather than descending into it. Rows show a dash until their size lands, and the toolbar shows how many are left. Nothing blocks on measuring 76 GB.
+
+**4. Pull request state fills in last.** If the GitHub CLI is installed, Coppice runs one `gh pr list` per repository and matches PRs to branches. A merged or closed PR is the clearest signal that a worktree is finished.
+
+**5. You act, from the menu bar or the window.** The menu bar item shows reclaimable space once it crosses your threshold. Clicking it offers **Sweep**, which is the reversible one and the only action offered without opening the window. Everything destructive lives in the window behind a selection.
+
+**6. Every deletion re-verifies first.** This is the part that matters. Coppice scans on its own schedule, so a verdict can be minutes old by the time you press a button, and in those minutes an agent may have opened the worktree you picked. Every rule is recomputed at the instant of deletion. If the answer changed, that item is skipped and reported rather than deleted.
+
+**7. Results are reported, not swallowed.** Progress is per worktree with a running freed total. The outcome is a banner that distinguishes success from a partial run from an outright failure, listing every skipped and failed path with its reason. Everything also goes to `~/Library/Application Support/Coppice/activity.log`.
+
+### When a block is in your way
+
+Most worktrees are scratch space, so a block you can never clear would make Coppice useless on exactly the ones worth deleting. Of the eleven rules, **three are absolute** and eight are yours to override.
+
+| | Rules | Why |
+| --- | --- | --- |
+| **Absolute** | live process, main worktree, outside your folders | Forcing past these corrupts something no confirmation can undo |
+| **Overridable** | the other eight | This is your own work, and discarding it is a decision you are allowed to make |
+
+An overridable block shows **Remove Anyway**, which states exactly what will be destroyed ("5 commits not on the default branch will be lost"), shows whether the branch's PR is already merged, and still requires typing the worktree name. Even then it rescues your gitignored config first: choosing to discard your *work* is not the same as choosing to lose the API keys that happened to sit in the same folder.
 
 ## What it does
 
@@ -51,6 +80,8 @@ Coppice refuses to remove a worktree for any of eleven reasons:
 11. It is the repository's own working copy
 
 **Rule 6 is the one that matters.** A `.env.local` is gitignored, so `git status` reports the worktree as perfectly clean while it holds live secrets. A cleaner that trusts git alone deletes it with no warning and no copy anywhere.
+
+Eight of these eleven are overridable, as described in [The workflow](#when-a-block-is-in-your-way). Only a live process, the main worktree and the folder boundary refuse absolutely.
 
 Every rule is recomputed **at the moment of deletion**, not when the list was built. Coppice scans in the background, so a verdict can be minutes old by the time you press a button, and in those minutes an agent may have opened the very worktree you picked.
 
@@ -124,4 +155,4 @@ If you touch the verdict engine, add a case to `Tests/CoppiceTests/VerdictTests.
 
 ## License
 
-GPL-3.0. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

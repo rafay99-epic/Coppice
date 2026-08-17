@@ -138,6 +138,82 @@ final class ParsingTests: XCTestCase {
         XCTAssertTrue(saved.contains(.manual))
     }
 
+    // MARK: Override severity
+
+    /// Worktrees are scratch space. Refusing forever would make the app useless
+    /// on exactly the ones the user most wants gone, so everything that is
+    /// merely *the user's own work* has to be overridable.
+    func testOnlyCorruptingBlockersAreAbsolute() {
+        let absolute: [Blocker] = [
+            .mainWorktree,
+            .liveProcess(command: "node", pid: 1),
+            .outsideScanRoots,
+        ]
+        for blocker in absolute {
+            XCTAssertEqual(blocker.severity, .absolute, "\(blocker) must never be overridable")
+            XCTAssertNil(blocker.lossIfForced, "an absolute blocker has no override to describe")
+            XCTAssertFalse(Verdict.blocked(blocker).canForceRemove)
+        }
+
+        let overridable: [Blocker] = [
+            .uncommittedChanges(count: 2),
+            .untrackedFiles(count: 1),
+            .unpushedCommits(count: 3),
+            .aheadOfDefault(count: 1),
+            .ignoredConfig(files: [".env.local"]),
+            .locked(reason: ""),
+            .gitOperationInProgress(operation: "Rebase"),
+            .dirtySubmodule(name: "vendor"),
+        ]
+        for blocker in overridable {
+            XCTAssertEqual(blocker.severity, .overridable, "\(blocker) should be the user's call")
+            XCTAssertNotNil(blocker.lossIfForced, "an override must state what it destroys")
+            XCTAssertTrue(Verdict.blocked(blocker).canForceRemove)
+            XCTAssertFalse(Verdict.blocked(blocker).canRemove, "still blocked without an explicit override")
+        }
+    }
+
+    // MARK: Pull requests
+
+    func testParsesPullRequestsByBranch() {
+        let json = """
+        [
+          {"number":12,"state":"MERGED","title":"Add uptime","url":"https://x/12","isDraft":false,
+           "headRefName":"feat/uptime"},
+          {"number":13,"state":"OPEN","title":"Redesign","url":"https://x/13","isDraft":true,
+           "headRefName":"feat/redesign"}
+        ]
+        """
+        let byBranch = GitHub.parse(Data(json.utf8))
+
+        XCTAssertEqual(byBranch["feat/uptime"]?.state, .merged)
+        XCTAssertTrue(byBranch["feat/uptime"]?.isSettled == true)
+        XCTAssertEqual(byBranch["feat/redesign"]?.state, .open)
+        XCTAssertTrue(byBranch["feat/redesign"]?.isDraft == true)
+        XCTAssertFalse(byBranch["feat/redesign"]?.isSettled == true)
+    }
+
+    /// A branch reused across several PRs should report the open one, not
+    /// whichever the API listed first.
+    func testOpenPullRequestWinsOverOlderClosedOne() {
+        let json = """
+        [
+          {"number":4,"state":"CLOSED","title":"First try","url":"https://x/4","isDraft":false,
+           "headRefName":"feat/thing"},
+          {"number":9,"state":"OPEN","title":"Second try","url":"https://x/9","isDraft":false,
+           "headRefName":"feat/thing"}
+        ]
+        """
+        let byBranch = GitHub.parse(Data(json.utf8))
+        XCTAssertEqual(byBranch["feat/thing"]?.number, 9)
+        XCTAssertEqual(byBranch["feat/thing"]?.state, .open)
+    }
+
+    func testMalformedPullRequestPayloadIsIgnored() {
+        XCTAssertTrue(GitHub.parse(Data("not json".utf8)).isEmpty)
+        XCTAssertTrue(GitHub.parse(Data("[]".utf8)).isEmpty)
+    }
+
     // MARK: Config classification
 
     /// The rule that protects secrets must not fire on committed templates.

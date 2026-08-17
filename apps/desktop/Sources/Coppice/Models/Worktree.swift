@@ -28,8 +28,22 @@ struct Worktree: Identifiable, Hashable, Sendable {
     var displayBranch: String { branch ?? "detached at \(head.prefix(7))" }
 }
 
-/// A reason removal is refused outright. Every case names the fix, because a
-/// block the user cannot clear is just a dead end.
+/// How firmly a blocker refuses.
+///
+/// Worktrees are scratch space. Most carry uncommitted edits that were never
+/// meant to survive, so a block the user can never clear turns the app into an
+/// obstacle: the worktrees you most want gone are exactly the ones it refuses
+/// to touch. Overridable blockers state what would be lost and let the user
+/// decide; absolute ones would corrupt something no confirmation can undo.
+enum Severity: Equatable, Hashable, Sendable {
+    /// Never removable, however hard the user insists.
+    case absolute
+    /// Removable after an explicit, informed confirmation.
+    case overridable
+}
+
+/// A reason removal is refused. Every case names the fix, because a block the
+/// user cannot clear is just a dead end.
 enum Blocker: Equatable, Hashable, Sendable {
     case mainWorktree
     case liveProcess(command: String, pid: Int32)
@@ -103,6 +117,45 @@ enum Blocker: Equatable, Hashable, Sendable {
         }
     }
 
+    /// Whether the user may override this.
+    ///
+    /// The three absolutes are not stubbornness. Removing the main worktree
+    /// breaks the repository, deleting a directory out from under a running
+    /// process corrupts whatever it is mid-write, and the roots check is the
+    /// boundary that stops a symlink pointing Coppice somewhere it should not
+    /// reach. Everything else is the user's own work, and theirs to discard.
+    var severity: Severity {
+        switch self {
+        case .mainWorktree, .liveProcess, .outsideScanRoots: return .absolute
+        default: return .overridable
+        }
+    }
+
+    /// Exactly what is destroyed if the user overrides. Shown verbatim in the
+    /// confirmation, so nobody discards work without reading what it was.
+    var lossIfForced: String? {
+        switch self {
+        case .uncommittedChanges(let count):
+            return "\(count) uncommitted change\(count == 1 ? "" : "s") will be lost"
+        case .untrackedFiles(let count):
+            return "\(count) untracked file\(count == 1 ? "" : "s") will be lost"
+        case .unpushedCommits(let count):
+            return "\(count) commit\(count == 1 ? "" : "s") that exist only here will be lost"
+        case .aheadOfDefault(let count):
+            return "\(count) commit\(count == 1 ? "" : "s") not on the default branch will be lost"
+        case .ignoredConfig(let files):
+            return "\(files.count) local config file\(files.count == 1 ? "" : "s") will be lost"
+        case .dirtySubmodule(let name):
+            return "changes inside submodule \(name) will be lost"
+        case .gitOperationInProgress(let operation):
+            return "the in-progress \(operation.lowercased()) will be abandoned"
+        case .locked:
+            return "the worktree lock will be released first"
+        case .mainWorktree, .liveProcess, .outsideScanRoots:
+            return nil
+        }
+    }
+
     /// Sweep only ever respects the live-process rule. Build artifacts are not
     /// source, so uncommitted work in the same worktree is irrelevant to them.
     var blocksSweep: Bool {
@@ -145,6 +198,20 @@ enum Verdict: Equatable, Hashable, Sendable {
         case .safe, .caution, .prunable, .orphan: return true
         case .blocked: return false
         }
+    }
+
+    /// Whether removal is possible at all, given an explicit override.
+    var canForceRemove: Bool {
+        switch self {
+        case .blocked(let blocker): return blocker.severity == .overridable
+        default: return true
+        }
+    }
+
+    /// The blocker standing in the way, if any.
+    var blocker: Blocker? {
+        if case .blocked(let blocker) = self { return blocker }
+        return nil
     }
 
     /// Sweeping artifacts is allowed unless something is actively running here.
@@ -190,6 +257,13 @@ struct WorktreeReport: Identifiable, Hashable, Sendable {
     var artifacts: [Artifact]
     /// Set once a size walk has finished, so the UI can show a dash until then.
     var measured: Bool
+    /// The pull request for this branch, once looked up. Nil means unknown
+    /// rather than absent — the lookup is lazy and may not have run yet.
+    var pullRequest: PullRequest?
+
+    /// A merged or closed PR means the branch is finished, so whatever is left
+    /// uncommitted in the worktree is almost certainly debris.
+    var isLikelyDisposable: Bool { pullRequest?.isSettled == true }
 
     var id: String { worktree.path }
     var totalBytes: Int64 { artifactBytes + uniqueBytes }
@@ -200,7 +274,8 @@ struct WorktreeReport: Identifiable, Hashable, Sendable {
         artifactBytes: Int64 = 0,
         uniqueBytes: Int64 = 0,
         artifacts: [Artifact] = [],
-        measured: Bool = false
+        measured: Bool = false,
+        pullRequest: PullRequest? = nil
     ) {
         self.worktree = worktree
         self.verdict = verdict
@@ -208,6 +283,7 @@ struct WorktreeReport: Identifiable, Hashable, Sendable {
         self.uniqueBytes = uniqueBytes
         self.artifacts = artifacts
         self.measured = measured
+        self.pullRequest = pullRequest
     }
 }
 
