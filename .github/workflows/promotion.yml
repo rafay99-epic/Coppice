@@ -58,8 +58,15 @@ jobs:
         if: steps.changelog.outputs.empty == 'false' && inputs.dry_run == false
         run: |
           git merge --squash nightly
-          git commit --file /tmp/notes.md --edit=false \
-            || { echo "::error::nothing staged after squash"; exit 1; }
+          # `-F` already suppresses the editor, so no --edit flag is needed.
+          # `--edit=false` is not valid git syntax and fails the step *after*
+          # the squash has staged everything, which reads as "nothing staged"
+          # when in fact everything was.
+          if git diff --cached --quiet; then
+            echo "::error::squash staged nothing, so there is nothing to promote"
+            exit 1
+          fi
+          git commit --file /tmp/notes.md
           git push origin main
           echo "::notice::Promoted nightly → main. CI will build and publish the release."
 
