@@ -25,6 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Dispatching ci.yml needs this. Without it the push lands and the
+      # release never builds, with a 403 buried at the end of a step that
+      # otherwise reports success.
+      actions: write
     steps:
       - uses: actions/checkout@v5
         with:
