@@ -1,201 +1,197 @@
 import SwiftUI
 
-/// The dropdown panel. Answers one question ("is there anything to reclaim?")
-/// and offers the one safe action. Everything destructive lives in the window.
+/// The panel that drops out of the status item.
+///
+/// Answers one question — is there anything worth reclaiming — and offers the
+/// reversible action. Everything destructive lives in the window, behind a
+/// selection and a typed confirmation.
 struct MenuBarView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var updater: Updater
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Divider().overlay(Theme.line)
+                .padding(12)
+
+            if case .available(let release) = updater.status {
+                Divider()
+                updateCallout(release)
+            }
+
+            if let banner = model.banner {
+                Divider()
+                BannerView(banner: banner) { model.banner = nil }
+            }
+
+            Divider()
 
             if model.visibleReports.isEmpty {
                 emptyState
             } else {
-                summary
-                Divider().overlay(Theme.line)
-                actions
+                breakdown
             }
 
-            Divider().overlay(Theme.line)
+            Divider()
             footer
+                .padding(12)
         }
         .frame(width: 300)
-        .background(Theme.panel)
-        .preferredColorScheme(.dark)
     }
+
+    // MARK: Header
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "scissors")
-                .foregroundStyle(Theme.safe)
-            Text("Coppice")
-                .font(.system(size: 13, weight: .semibold))
-            Spacer()
-            if model.isScanning {
-                Text("scanning")
-                    .font(Theme.mono(9))
-                    .foregroundStyle(Theme.tertiary)
-            } else if let last = model.lastScan {
-                Text(last, style: .relative)
-                    .font(Theme.mono(9))
-                    .foregroundStyle(Theme.tertiary)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "scissors")
+                    .font(.system(size: 17))
+                    .foregroundStyle(model.reclaimableBytes > 0 ? .green : .secondary)
+                    .frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(headline).font(.headline)
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            if model.activity.isBusy {
+                ActivityBar(activity: model.activity)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
     }
+
+    private var headline: String {
+        if model.isScanning, model.visibleReports.isEmpty { return "Scanning…" }
+        if model.reclaimableBytes == 0 { return "Nothing to reclaim" }
+        return "\(Format.bytes(model.reclaimableBytes)) reclaimable"
+    }
+
+    private var subtitle: String {
+        if model.visibleReports.isEmpty { return "No worktrees found yet" }
+        let repos = model.groups.count
+        return "\(model.visibleReports.count) worktrees in \(repos) repo\(repos == 1 ? "" : "s")"
+    }
+
+    // MARK: Body
 
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(model.isScanning ? "Looking for worktrees…" : "No worktrees found")
-                .font(.system(size: 12))
-            Text(model.isScanning
-                 ? "This takes a moment on first run."
-                 : "Nothing to clean. Add a scan root in Settings if that looks wrong.")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        Text(model.isScanning
+             ? "Reading git metadata across your scan folders."
+             : "Nothing found. Add a folder in Settings if that looks wrong.")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(12)
     }
 
-    private var summary: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(Format.bytes(model.reclaimableBytes))
-                    .font(Theme.mono(26, weight: .semibold))
-                    .contentTransition(.numericText())
-                Text("reclaimable")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.secondary)
-            }
-
-            HStack(spacing: 14) {
-                metric("\(model.visibleReports.count)", "worktrees")
-                metric("\(model.groups.count)", "repos")
-                metric(Format.bytes(model.totalBytes), "on disk")
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .animation(Theme.motion, value: model.reclaimableBytes)
-    }
-
-    private func metric(_ value: String, _ label: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(value)
-                .font(Theme.mono(11, weight: .medium))
-            Text(label)
-                .font(.system(size: 9))
-                .foregroundStyle(Theme.tertiary)
-        }
-    }
-
-    private var actions: some View {
+    private var breakdown: some View {
         VStack(spacing: 0) {
-            if !model.sweepCandidates.isEmpty {
-                MenuRow(
-                    title: "Sweep build artifacts",
-                    detail: "\(model.sweepCandidates.count) worktrees · \(Format.bytes(model.reclaimableBytes))",
-                    symbol: "scissors",
-                    tint: Theme.safe,
-                    disabled: model.isWorking
-                ) {
-                    Task { await model.sweep(model.sweepCandidates) }
-                }
-            }
+            row(
+                title: "Safe to sweep",
+                detail: "\(model.sweepCandidates.count) worktrees",
+                value: Format.compactBytes(model.reclaimableBytes),
+                symbol: "scissors",
+                tint: .green
+            )
+            row(
+                title: "Protected",
+                detail: "Coppice will not remove these",
+                value: "\(model.protectedCount)",
+                symbol: "lock.fill",
+                tint: .red
+            )
             if !model.prunableReports.isEmpty {
-                MenuRow(
-                    title: "Prune stale metadata",
-                    detail: "\(model.prunableReports.count) worktrees git already considers dead",
-                    symbol: "trash.slash",
-                    tint: Theme.info,
-                    disabled: model.isWorking
-                ) {
-                    Task { await model.prune() }
-                }
-            }
-            MenuRow(
-                title: "Open Coppice",
-                detail: "Review every worktree and its verdict",
-                symbol: "rectangle.stack",
-                tint: Theme.primary,
-                disabled: false
-            ) {
-                openMainWindow(openWindow)
+                row(
+                    title: "Stale metadata",
+                    detail: "Directories already gone",
+                    value: "\(model.prunableReports.count)",
+                    symbol: "clock.arrow.circlepath",
+                    tint: .secondary
+                )
             }
         }
         .padding(.vertical, 4)
     }
 
-    private var footer: some View {
+    private func row(
+        title: String,
+        detail: String,
+        value: String,
+        symbol: String,
+        tint: Color
+    ) -> some View {
         HStack(spacing: 10) {
-            if let message = model.statusMessage {
-                Text(message)
-                    .font(.system(size: 10))
-                    .foregroundStyle(Theme.secondary)
-                    .lineLimit(1)
+            Image(systemName: symbol)
+                .foregroundStyle(tint)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.callout)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
             }
-            Spacer()
-            Button("Rescan") { model.rescan() }
-                .buttonStyle(.plain)
-                .font(.system(size: 10))
-                .foregroundStyle(Theme.secondary)
-                .disabled(model.isScanning)
-            Button("Quit") { NSApplication.shared.terminate(nil) }
-                .buttonStyle(.plain)
-                .font(.system(size: 10))
-                .foregroundStyle(Theme.secondary)
+            Spacer(minLength: 8)
+            Text(value).font(.callout).monospacedDigit().foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
     }
-}
 
-/// A tappable row in the menu bar panel, with a hover state that does not repaint
-/// continuously.
-struct MenuRow: View {
-    let title: String
-    let detail: String
-    let symbol: String
-    let tint: Color
-    let disabled: Bool
-    let action: () -> Void
-
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: symbol)
-                    .font(.system(size: 12))
-                    .foregroundStyle(disabled ? Theme.tertiary : tint)
-                    .frame(width: 18)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(disabled ? Theme.tertiary : Theme.primary)
-                    Text(detail)
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(hovering && !disabled ? Theme.elevated : .clear)
-            .contentShape(Rectangle())
+    private func updateCallout(_ release: Updater.Release) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.down.circle.fill").foregroundStyle(.blue)
+            Text("Version \(release.version) available").font(.callout)
+            Spacer()
+            Button("Update") { Task { await updater.installUpdate() } }
+                .controlSize(.small)
+                .disabled(updater.isBusy)
         }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .onHover { hovering = $0 }
-        .animation(Theme.fade, value: hovering)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.blue.opacity(0.12))
+    }
+
+    // MARK: Footer
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Button {
+                    Task { await model.sweep(model.sweepCandidates) }
+                } label: {
+                    Label("Sweep", systemImage: "scissors")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.sweepCandidates.isEmpty || model.isWorking)
+
+                Button("Open Coppice") { openMainWindow(openWindow) }
+
+                Spacer()
+
+                Menu {
+                    Button("Rescan") { model.rescan() }
+                        .disabled(model.isScanning)
+                    Button("Prune \(model.prunableReports.count) Stale") { Task { await model.prune() } }
+                        .disabled(model.prunableReports.isEmpty || model.isWorking)
+                    Divider()
+                    SettingsLink { Text("Settings…") }
+                    Button("Activity Log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
+                    Divider()
+                    Button("Quit Coppice") { NSApplication.shared.terminate(nil) }
+                        .keyboardShortcut("q")
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+            }
+
+            if let last = model.lastScan {
+                Text("Last checked \(last.formatted(date: .omitted, time: .shortened))")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
     }
 }

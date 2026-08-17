@@ -20,6 +20,8 @@ final class AppSettings: ObservableObject {
     @AppStorage("autoUpdateCheck") var autoUpdateCheck: Bool = true
     /// Rescue gitignored config to a folder before removing a worktree.
     @AppStorage("rescueIgnoredConfig") var rescueIgnoredConfig: Bool = true
+    /// Look up pull request state so a finished branch can be recognised.
+    @AppStorage("checkPullRequests") var checkPullRequests: Bool = true
     /// How recently an agent session counts as recent, in hours.
     @AppStorage("recentSessionHours") var recentSessionHours: Double = 24
 
@@ -54,6 +56,16 @@ final class AppSettings: ObservableObject {
     var rescueDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appending(path: "Documents/Coppice Rescue")
+    }
+
+    /// Whether the main window should come up at launch.
+    ///
+    /// Static because both the scene modifier and the app delegate need the same
+    /// answer before any instance exists. Reads `UserDefaults` directly for the
+    /// same reason.
+    static var presentsWindowAtLaunch: Bool {
+        let completed = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        return !completed || Channel.current == .dev
     }
 
     /// Code directories that actually exist, so a fresh install starts with

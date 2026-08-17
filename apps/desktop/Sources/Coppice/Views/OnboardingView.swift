@@ -1,15 +1,15 @@
 import SwiftUI
 import AppKit
 
-/// First run. Four screens, and every one either reports something measured from
-/// this machine or asks a question that changes behaviour. None of them exist to
-/// say hello.
+/// First run. Four screens, each of which either reports something measured from
+/// this machine or asks a question that changes behaviour. None exist to say hello.
 ///
-/// This is a safety briefing rather than a feature tour, because Coppice is
-/// allowed to delete things and the user has no reason to trust it yet.
+/// A safety briefing rather than a feature tour, because Coppice can delete
+/// things and the user has no reason to trust it yet.
 struct OnboardingView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
+
     @State private var step = 0
     @State private var selectedHarnesses: Set<Harness> = []
     @State private var roots: [URL] = []
@@ -18,201 +18,193 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            progress
-            Divider().overlay(Theme.line)
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-            Group {
-                switch step {
-                case 0: welcome
-                case 1: harnesses
-                case 2: locations
-                default: protections
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(28)
-            .transition(.asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-            ))
-
-            Divider().overlay(Theme.line)
+            Divider()
             controls
+                .padding(16)
         }
-        .background(Theme.background)
-        .animation(Theme.motion, value: step)
+        .frame(minWidth: 620, minHeight: 520)
         .task {
             selectedHarnesses = Set(model.detectedHarnesses)
             roots = settings.codeRoots
-            model.start()
         }
     }
 
-    private var progress: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "scissors").foregroundStyle(Theme.safe)
-            Text("Coppice").font(.system(size: 13, weight: .semibold))
-            Spacer()
-            ForEach(0..<stepCount, id: \.self) { index in
-                Capsule()
-                    .fill(index <= step ? Theme.primary : Theme.line)
-                    .frame(width: index == step ? 20 : 7, height: 3)
-            }
+    @ViewBuilder
+    private var content: some View {
+        switch step {
+        case 0: welcome
+        case 1: harnesses
+        case 2: locations
+        default: protections
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .animation(Theme.motion, value: step)
     }
 
     // MARK: Step 1
 
     private var welcome: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            heading("You have \(model.visibleReports.count) worktrees using \(Format.bytes(model.totalBytes)).",
-                    "Measured on this machine just now, not an example.")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                hero(
+                    symbol: "scissors",
+                    title: model.visibleReports.isEmpty
+                        ? "Looking for worktrees…"
+                        : "You have \(model.visibleReports.count) worktrees using \(Format.bytes(model.totalBytes)).",
+                    subtitle: "Measured on this machine just now, not an example."
+                )
 
-            HStack(spacing: 1) {
-                StatTile(value: "\(model.visibleReports.count)", label: "worktrees found")
-                StatTile(value: "\(model.groups.count)", label: "repositories")
-                StatTile(value: Format.bytes(model.reclaimableBytes), label: "in build artifacts", tint: Theme.safe)
+                GroupBox {
+                    HStack(spacing: 0) {
+                        stat("\(model.visibleReports.count)", "Worktrees")
+                        Divider().frame(height: 34)
+                        stat("\(model.groups.count)", "Repositories")
+                        Divider().frame(height: 34)
+                        stat(Format.compactBytes(model.reclaimableBytes), "Reclaimable", tint: .green)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+
+                Text("""
+                Coding agents create a worktree per task and rarely clean up. Most of the \
+                space is dependency folders, which rebuild from a single install command, so \
+                most of it can go back without touching a line of your work.
+                """)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+                if model.isScanning {
+                    Label(
+                        "Still scanning, so these numbers are still climbing.",
+                        systemImage: "arrow.triangle.2.circlepath"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             }
-            .background(Theme.line)
-            .clipShape(RoundedRectangle(cornerRadius: 7))
-
-            Text("""
-            Agents create a worktree per task and rarely clean up. The space is mostly \
-            dependency folders, which rebuild from a single install command, so most of \
-            it can go back without touching a line of your work.
-            """)
-            .font(.system(size: 12))
-            .foregroundStyle(Theme.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            if model.isScanning {
-                Text("Still scanning, so these numbers are still climbing.")
-                    .font(Theme.mono(10))
-                    .foregroundStyle(Theme.tertiary)
-            }
+            .padding(24)
         }
+    }
+
+    private func stat(_ value: String, _ label: String, tint: Color = .primary) -> some View {
+        VStack(spacing: 2) {
+            Text(value).font(.title2).fontWeight(.semibold).foregroundStyle(tint).monospacedDigit()
+            Text(label).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
     }
 
     // MARK: Step 2
 
     private var harnesses: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            heading("Detected \(model.detectedHarnesses.count) coding agents.",
-                    "Found by checking which tool directories exist in your home folder.")
+        VStack(alignment: .leading, spacing: 0) {
+            hero(
+                symbol: "wand.and.sparkles",
+                title: "Found \(model.detectedHarnesses.count) coding agents.",
+                subtitle: "Detected by checking which tool directories exist in your home folder."
+            )
+            .padding(24)
 
-            VStack(spacing: 0) {
-                ForEach(model.detectedHarnesses, id: \.self) { harness in
-                    harnessRow(harness)
-                }
-                if model.detectedHarnesses.isEmpty {
-                    Text("No agent directories found. Coppice will still find worktrees you made by hand.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.secondary)
-                        .padding(14)
+            Form {
+                Section {
+                    if model.detectedHarnesses.isEmpty {
+                        Text("No agent directories found. Coppice will still find worktrees you made by hand.")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(model.detectedHarnesses, id: \.self) { harness in
+                        Toggle(isOn: binding(for: harness)) {
+                            Label {
+                                let count = model.reports.filter { $0.worktree.harness == harness }.count
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(harness.displayName)
+                                    Text("\(count) worktree\(count == 1 ? "" : "s")")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: harness.symbol)
+                            }
+                        }
+                    }
+                } footer: {
+                    Text("""
+                    Unchecked agents are hidden everywhere in the app, including the totals. \
+                    Worktrees you made by hand are always shown.
+                    """)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
-            .background(Theme.panel, in: RoundedRectangle(cornerRadius: 7))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.line, lineWidth: 1))
-
-            Text("Unchecked agents are hidden everywhere in the app, including the totals.")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.tertiary)
+            .formStyle(.grouped)
         }
     }
 
-    private func harnessRow(_ harness: Harness) -> some View {
-        let count = model.reports.filter { $0.worktree.harness == harness }.count
-        return HStack(spacing: 11) {
-            Image(systemName: harness.symbol)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.secondary)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(harness.displayName).font(.system(size: 12, weight: .medium))
-                Text("\(count) worktree\(count == 1 ? "" : "s")")
-                    .font(Theme.mono(10))
-                    .foregroundStyle(Theme.tertiary)
+    private func binding(for harness: Harness) -> Binding<Bool> {
+        Binding(
+            get: { selectedHarnesses.contains(harness) },
+            set: { isOn in
+                if isOn { selectedHarnesses.insert(harness) } else { selectedHarnesses.remove(harness) }
             }
-            Spacer()
-            Toggle("", isOn: Binding(
-                get: { selectedHarnesses.contains(harness) },
-                set: { isOn in
-                    if isOn { selectedHarnesses.insert(harness) } else { selectedHarnesses.remove(harness) }
-                }
-            ))
-            .toggleStyle(.switch)
-            .labelsHidden()
-            .controlSize(.mini)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .hairline()
+        )
     }
 
     // MARK: Step 3
 
     private var locations: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            heading("Where should Coppice look?",
-                    "Agent worktree directories are always included. These are your own code folders.")
+        VStack(alignment: .leading, spacing: 0) {
+            hero(
+                symbol: "folder",
+                title: "Where should Coppice look?",
+                subtitle: "Agent worktree directories are always included. These are your own code folders."
+            )
+            .padding(24)
 
-            VStack(spacing: 0) {
-                ForEach(roots, id: \.self) { root in
-                    HStack {
-                        Image(systemName: "folder")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.tertiary)
-                        Text(root.path)
-                            .font(Theme.mono(11))
-                            .lineLimit(1)
-                            .truncationMode(.head)
-                        Spacer()
-                        Button {
-                            roots.removeAll { $0 == root }
-                        } label: {
-                            Image(systemName: "minus.circle")
-                                .foregroundStyle(Theme.tertiary)
+            Form {
+                Section {
+                    ForEach(roots, id: \.self) { root in
+                        HStack {
+                            Label(root.lastPathComponent, systemImage: "folder")
+                            Spacer()
+                            Text(root.deletingLastPathComponent().path)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                                .truncationMode(.head)
+                            Button {
+                                roots.removeAll { $0 == root }
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                            }
+                            .buttonStyle(.borderless)
+                            .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .hairline()
+                    Button("Add Folder…") { chooseFolder() }
+                } header: {
+                    Text("Code Folders")
                 }
-                HStack {
-                    Button("Add folder…") { chooseFolder() }
-                        .buttonStyle(SecondaryButton())
-                    Spacer()
-                }
-                .padding(11)
-            }
-            .background(Theme.panel, in: RoundedRectangle(cornerRadius: 7))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.line, lineWidth: 1))
 
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Full Disk Access")
-                    .font(.system(size: 12, weight: .medium))
-                Text("""
-                Without it macOS hides parts of your home folder, so Coppice under-reports \
-                sizes and can miss worktrees. It never needs admin rights, and it never \
-                reads file contents, only names and sizes.
-                """)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                Button("Open Privacy Settings") {
-                    let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
-                    if let url { NSWorkspace.shared.open(url) }
+                Section {
+                    Text("""
+                    Without Full Disk Access macOS hides parts of your home folder, so Coppice \
+                    under-reports sizes and can miss worktrees. It never needs admin rights, and \
+                    it only reads names and sizes, never file contents.
+                    """)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    Button("Open Privacy Settings…") {
+                        let path = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+                        if let url = URL(string: path) { NSWorkspace.shared.open(url) }
+                    }
+                } header: {
+                    Text("Full Disk Access")
                 }
-                .buttonStyle(SecondaryButton())
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.panel, in: RoundedRectangle(cornerRadius: 7))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.line, lineWidth: 1))
+            .formStyle(.grouped)
         }
     }
 
@@ -229,84 +221,110 @@ struct OnboardingView: View {
     // MARK: Step 4
 
     private var protections: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            heading("What Coppice will never delete.",
-                    "Every rule is checked again at the moment of deletion, not just when the list was built.")
-
-            VStack(alignment: .leading, spacing: 0) {
-                rule("Anything with a process running in it", "An open session, editor or dev server blocks both sweep and remove.")
-                rule("Uncommitted or untracked changes", "Modified files, staged files and new files all block removal.")
-                rule("Commits that exist nowhere else", "Unpushed work, or commits missing from the default branch.")
-                rule("Gitignored config such as .env.local", "Git reports these worktrees as clean, so this is the rule that matters most.")
-                rule("The repository's own working copy", "The main worktree is never removable, under any setting.")
-            }
-            .background(Theme.panel, in: RoundedRectangle(cornerRadius: 7))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.line, lineWidth: 1))
-
-            let blocked = model.reports.filter { !$0.verdict.canRemove }.count
-            Label(
-                """
-                Dry run on your machine: \(model.reports.count) worktrees checked, \
-                \(blocked) protected, \(Format.bytes(model.reclaimableBytes)) safe to sweep. \
-                Nothing has been deleted.
-                """,
-                systemImage: "checkmark.shield"
+        VStack(alignment: .leading, spacing: 0) {
+            hero(
+                symbol: "lock.shield",
+                title: "What Coppice will never delete.",
+                subtitle: "Every rule is checked again at the moment of deletion, not just when the list was built."
             )
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.safe)
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.safe.opacity(0.07), in: RoundedRectangle(cornerRadius: 6))
+            .padding(24)
+
+            Form {
+                Section {
+                    rule(
+                        "Anything with a process running in it",
+                        "An open session, editor or dev server blocks both sweep and remove."
+                    )
+                    rule(
+                        "Uncommitted or untracked changes",
+                        "Modified files, staged files and new files all block removal."
+                    )
+                    rule(
+                        "Commits that exist nowhere else",
+                        "Unpushed work, or commits missing from the default branch."
+                    )
+                    rule(
+                        "Gitignored config such as .env.local",
+                        "Git reports these worktrees as clean, so this is the rule that matters most."
+                    )
+                    rule(
+                        "The repository's own working copy",
+                        "The main worktree is never removable, under any setting."
+                    )
+                }
+
+                Section {
+                    Label {
+                        Text("""
+                        Dry run: \(model.visibleReports.count) worktrees checked, \
+                        \(model.protectedCount) protected, \
+                        \(Format.bytes(model.reclaimableBytes)) safe to sweep. Nothing has been deleted.
+                        """)
+                        .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "checkmark.shield.fill").foregroundStyle(.green)
+                    }
+                    .font(.callout)
+                }
+            }
+            .formStyle(.grouped)
         }
     }
 
     private func rule(_ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 9))
-                .foregroundStyle(Theme.blocked)
-                .padding(.top, 2)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 12, weight: .medium))
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
                 Text(detail)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.secondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 0)
+        } icon: {
+            Image(systemName: "lock.fill").foregroundStyle(.red)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .hairline()
     }
 
     // MARK: Chrome
 
-    private func heading(_ title: String, _ subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 20, weight: .semibold))
-                .fixedSize(horizontal: false, vertical: true)
-            Text(subtitle)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+    private func hero(symbol: String, title: String, subtitle: String) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            Image(systemName: symbol)
+                .font(.system(size: 30))
+                .foregroundStyle(.tint)
+                .frame(width: 40)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(subtitle)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
         }
     }
 
     private var controls: some View {
         HStack {
-            if step > 0 {
-                Button("Back") { step -= 1 }.buttonStyle(SecondaryButton())
+            ForEach(0..<stepCount, id: \.self) { index in
+                Circle()
+                    .fill(index == step ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary))
+                    .frame(width: 6, height: 6)
             }
+
             Spacer()
-            Button(step == stepCount - 1 ? "Start using Coppice" : "Continue") {
+
+            if step > 0 {
+                Button("Back") { step -= 1 }
+            }
+            Button(step == stepCount - 1 ? "Start Using Coppice" : "Continue") {
                 if step == stepCount - 1 { finish() } else { step += 1 }
             }
-            .buttonStyle(PrimaryButton())
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
     }
 
     private func finish() {

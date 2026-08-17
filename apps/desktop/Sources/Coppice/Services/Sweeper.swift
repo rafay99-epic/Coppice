@@ -8,13 +8,35 @@ import Foundation
 /// and in those minutes an agent may have opened the very worktree that was
 /// about to be deleted.
 enum Sweeper {
+    /// One thing that did not happen, and why. A struct rather than a tuple so
+    /// the UI can list these, and so a reason never gets lost on the way out.
+    struct Item: Sendable, Hashable, Identifiable {
+        let path: String
+        let reason: String
+        var id: String { path + reason }
+        var name: String { (path as NSString).lastPathComponent }
+    }
+
     struct Outcome: Sendable {
         var freedBytes: Int64 = 0
         var removedPaths: [String] = []
-        var skipped: [(path: String, reason: String)] = []
-        var failures: [(path: String, error: String)] = []
+        var skipped: [Item] = []
+        var failures: [Item] = []
 
         var didAnything: Bool { !removedPaths.isEmpty }
+        var hasProblems: Bool { !skipped.isEmpty || !failures.isEmpty }
+    }
+
+    /// Where a long operation has got to. Reported per item so the UI can show a
+    /// determinate bar and name what is being worked on, rather than an
+    /// indeterminate spinner that tells the user nothing.
+    struct Progress: Sendable, Equatable {
+        var completed: Int
+        var total: Int
+        var currentName: String
+        var freedBytes: Int64
+
+        var fraction: Double { total > 0 ? Double(completed) / Double(total) : 0 }
     }
 
     // MARK: - Sweep
@@ -28,22 +50,35 @@ enum Sweeper {
         reports: [WorktreeReport],
         scanner: WorktreeScanner,
         fileManager: FileManager = .default,
-        log: (String) -> Void = { _ in }
+        log: (String) -> Void = { _ in },
+        onProgress: (Progress) -> Void = { _ in }
     ) -> Outcome {
         var outcome = Outcome()
         let holders = ProcessProbe.currentHolders()
+        let total = reports.count
+        var completed = 0
 
         for report in reports {
+            onProgress(
+                Progress(
+                    completed: completed,
+                    total: total,
+                    currentName: report.worktree.name,
+                    freedBytes: outcome.freedBytes
+                )
+            )
+            defer { completed += 1 }
+
             let worktree = report.worktree
 
             // Re-check liveness now, not when the list was built.
             if let holder = ProcessProbe.holder(of: worktree.path, among: holders) {
-                outcome.skipped.append((worktree.path, "\(holder.command) started working here"))
+                outcome.skipped.append(Item(path: worktree.path, reason: "\(holder.command) started working here"))
                 log("sweep skipped \(worktree.path): held by \(holder.command) (\(holder.pid))")
                 continue
             }
             guard scanner.isInsideAllowedRoot(worktree.path) else {
-                outcome.skipped.append((worktree.path, "outside the configured roots"))
+                outcome.skipped.append(Item(path: worktree.path, reason: "outside the configured roots"))
                 continue
             }
 
@@ -51,7 +86,7 @@ enum Sweeper {
             // deleted since the scan is not deleted twice and a new one is caught.
             for artifact in ArtifactScanner.scan(worktree: worktree.path, fileManager: fileManager) {
                 guard isContained(artifact.path, within: worktree.path) else {
-                    outcome.skipped.append((artifact.path, "resolved outside its worktree"))
+                    outcome.skipped.append(Item(path: artifact.path, reason: "resolved outside its worktree"))
                     continue
                 }
                 let size = ArtifactScanner.allocatedSize(of: artifact.path, fileManager: fileManager)
@@ -61,11 +96,12 @@ enum Sweeper {
                     outcome.removedPaths.append(artifact.path)
                     log("swept \(artifact.path) (\(Format.bytes(size)))")
                 } catch {
-                    outcome.failures.append((artifact.path, error.localizedDescription))
+                    outcome.failures.append(Item(path: artifact.path, reason: error.localizedDescription))
                     log("sweep failed \(artifact.path): \(error.localizedDescription)")
                 }
             }
         }
+        onProgress(Progress(completed: total, total: total, currentName: "", freedBytes: outcome.freedBytes))
         return outcome
     }
 
@@ -84,7 +120,9 @@ enum Sweeper {
                 outcome.removedPaths.append(repo)
                 log("pruned \(repo)")
             } else {
-                outcome.failures.append((repo, result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)))
+                outcome.failures.append(
+                    Item(path: repo, reason: result.stderr.trimmingCharacters(in: .whitespacesAndNewlines))
+                )
             }
         }
         return outcome
@@ -98,27 +136,42 @@ enum Sweeper {
     /// Order matters and is not negotiable. Removing the directory before
     /// pruning leaves git believing the worktree exists; pruning first while the
     /// directory is live orphans it. Any failed step aborts the rest.
+    /// - Parameter force: proceed despite an overridable blocker. Absolute
+    ///   blockers still refuse: no confirmation makes it safe to delete a
+    ///   directory a process is writing to, or to remove a repository's own
+    ///   working copy.
     static func remove(
         report: WorktreeReport,
         scanner: WorktreeScanner,
         deleteBranch: Bool,
         rescueDirectory: URL?,
+        force: Bool = false,
         fileManager: FileManager = .default,
         log: (String) -> Void = { _ in }
     ) -> Outcome {
         var outcome = Outcome()
         let worktree = report.worktree
 
-        // 1. Recompute from scratch. A cached verdict is never trusted here.
+        // 1. Recompute from scratch. A cached verdict is never trusted here,
+        //    and that applies to a forced removal too: the check that changes
+        //    is which blockers are fatal, never whether the check runs.
         let holders = ProcessProbe.currentHolders()
         let current = scanner.verdict(for: worktree, holders: holders)
-        guard current.canRemove else {
-            outcome.skipped.append((worktree.path, current.label))
-            log("remove refused \(worktree.path): \(current.label)")
-            return outcome
+        if !current.canRemove {
+            guard force, current.canForceRemove else {
+                let reason = current.blocker?.severity == .absolute
+                    ? "\(current.label) — this cannot be overridden"
+                    : current.label
+                outcome.skipped.append(Item(path: worktree.path, reason: reason))
+                log("remove refused \(worktree.path): \(reason)")
+                return outcome
+            }
+            // Record what the user chose to discard. If they later wonder where
+            // that branch went, the log is the only place that can answer.
+            log("remove FORCED \(worktree.path): overriding \(current.label)")
         }
         guard scanner.isInsideAllowedRoot(worktree.path) else {
-            outcome.skipped.append((worktree.path, "outside the configured roots"))
+            outcome.skipped.append(Item(path: worktree.path, reason: "outside the configured roots"))
             return outcome
         }
 
@@ -133,6 +186,13 @@ enum Sweeper {
             )
         }
 
+        // A locked worktree has to be released before git will prune it, so
+        // unlock as part of the override rather than leaving stale metadata.
+        if worktree.isLocked {
+            let unlock = Git.run(["worktree", "unlock", worktree.path], in: worktree.repoPath)
+            log(unlock.succeeded ? "unlocked \(worktree.path)" : "unlock failed: \(unlock.stderr)")
+        }
+
         let size = ArtifactScanner.allocatedSize(of: worktree.path, fileManager: fileManager)
 
         // 3. Trash, not remove. Unique content has no other undo.
@@ -142,7 +202,7 @@ enum Sweeper {
             outcome.removedPaths.append(worktree.path)
             log("removed \(worktree.path) → Trash (\(Format.bytes(size)))")
         } catch {
-            outcome.failures.append((worktree.path, error.localizedDescription))
+            outcome.failures.append(Item(path: worktree.path, reason: error.localizedDescription))
             log("remove failed \(worktree.path): \(error.localizedDescription)")
             return outcome // never continue past a failed step
         }
@@ -150,17 +210,27 @@ enum Sweeper {
         // 4. Only now is it safe to clear the metadata.
         let pruneResult = Git.prune(repo: worktree.repoPath)
         if !pruneResult.succeeded {
-            outcome.failures.append((worktree.repoPath, "prune failed: \(pruneResult.stderr)"))
+            outcome.failures.append(Item(path: worktree.repoPath, reason: "prune failed: \(pruneResult.stderr)"))
             return outcome
         }
 
         // 5. Opt-in, and `-d` so git keeps its veto over unmerged work.
         if deleteBranch, let branch = worktree.branch {
-            let result = Git.deleteBranch(branch, repo: worktree.repoPath)
+            // `-d` normally, `-D` only when the user already chose to discard
+            // unmerged work — otherwise git's veto would silently keep a branch
+            // the user explicitly asked to delete.
+            let result = force
+                ? Git.run(["branch", "-D", branch], in: worktree.repoPath)
+                : Git.deleteBranch(branch, repo: worktree.repoPath)
             if result.succeeded {
                 log("deleted branch \(branch)")
             } else {
-                outcome.skipped.append((branch, "git kept the branch: \(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines))"))
+                outcome.skipped.append(
+                    Item(
+                        path: branch,
+                        reason: "git kept the branch: \(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines))"
+                    )
+                )
             }
         }
 
@@ -215,16 +285,5 @@ enum Sweeper {
         let resolvedRoot = URL(fileURLWithPath: root).resolvingSymlinksInPath().path
         let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
         return resolved.hasPrefix(resolvedRoot.hasSuffix("/") ? resolvedRoot : resolvedRoot + "/")
-    }
-}
-
-/// Shared formatting so sizes read the same in the menu bar, the list and the log.
-enum Format {
-    static func bytes(_ value: Int64) -> String {
-        guard value > 0 else { return "0 B" }
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        formatter.allowedUnits = [.useKB, .useMB, .useGB, .useTB]
-        return formatter.string(fromByteCount: value)
     }
 }
