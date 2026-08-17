@@ -23,6 +23,12 @@ on:
       - ".github/workflows/ci.yml"
       - ".github/scripts/**"
       - ".swiftlint.yml"
+  # Promotion pushes to main with GITHUB_TOKEN, and GitHub deliberately does
+  # not raise `push` events for those, to stop a workflow triggering itself
+  # forever. So a promoted commit would sit on main and never ship. Dispatch
+  # is exempt from that rule, so promotion.yml calls this workflow directly.
+  # It also means a release can be re-cut by hand when one is needed.
+  workflow_dispatch:
 
 # PRs cancel superseded runs; main never cancels, so pushes serialize and two
 # releases cannot race to publish the same version.
@@ -88,7 +94,9 @@ jobs:
   # `gh release create` runs, so a broken compile cannot publish either.
   release:
     name: Build and publish release
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: macos-26
     needs: [test, lint]
     permissions:

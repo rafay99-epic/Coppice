@@ -56,6 +56,8 @@ jobs:
 
       - name: Promote
         if: steps.changelog.outputs.empty == 'false' && inputs.dry_run == false
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git merge --squash nightly
           # `-F` already suppresses the editor, so no --edit flag is needed.
@@ -68,7 +70,11 @@ jobs:
           fi
           git commit --file /tmp/notes.md
           git push origin main
-          echo "::notice::Promoted nightly → main. CI will build and publish the release."
+
+          # Kick CI explicitly. The push above used GITHUB_TOKEN, and GitHub
+          # suppresses `push` events for those, so nothing would build.
+          gh workflow run ci.yml --ref main
+          echo "::notice::Promoted nightly → main and started the release build."
 
       - name: Dry run summary
         if: steps.changelog.outputs.empty == 'false' && inputs.dry_run == true
