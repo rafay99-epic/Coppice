@@ -45,7 +45,7 @@ jobs:
     name: Test (swift test)
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Swift version
         run: swift --version
       # The verdict tests build real git repositories, and git refuses to commit
@@ -61,7 +61,7 @@ jobs:
     name: Quality (SwiftLint)
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Install SwiftLint
         run: brew install swiftlint
       - name: Lint
@@ -77,7 +77,7 @@ jobs:
     runs-on: macos-26
     needs: [test, lint]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Build app and installer
         run: |
           ./build.sh
@@ -102,7 +102,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history — the version is the commit count
 
