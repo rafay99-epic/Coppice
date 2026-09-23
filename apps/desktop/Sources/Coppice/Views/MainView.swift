@@ -137,10 +137,14 @@ struct MainView: View {
         }
     }
 
+    private var unreadableList: String {
+        model.unreadableRoots.map { ($0 as NSString).abbreviatingWithTildeInPath }.joined(separator: ", ")
+    }
+
     private var diskAccessBanner: some View {
         HStack(spacing: 10) {
             Image(systemName: "lock.shield").foregroundStyle(.secondary)
-            Text("Coppice can't read \(model.unreadableRoots.map { ($0 as NSString).abbreviatingWithTildeInPath }.joined(separator: ", ")). Allow Full Disk Access to include it.")
+            Text("Coppice can't read \(unreadableList). Allow Full Disk Access to include it.")
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
@@ -276,11 +280,11 @@ struct MainView: View {
         return "\(count) worktrees · \(Format.bytes(model.totalBytes))\(sizing)"
     }
 
-    private var filteredGroups: [(repo: String, path: String, harness: Harness, reports: [WorktreeReport])] {
+    private var filteredGroups: [RepoGroup] {
         model.groups.compactMap { group in
             let matching = group.reports.filter { scope.contains($0) && matchesSearch($0) }
             guard !matching.isEmpty else { return nil }
-            return (group.repo, group.path, group.harness, matching)
+            return RepoGroup(path: group.path, reports: matching)
         }
     }
 

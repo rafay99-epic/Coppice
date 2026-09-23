@@ -71,6 +71,13 @@ struct Banner: Identifiable, Equatable {
     var details: [Sweeper.Item] = []
 }
 
+struct RepoGroup {
+    let path: String
+    let reports: [WorktreeReport]
+
+    var repo: String { (path as NSString).lastPathComponent }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var reports: [WorktreeReport] = []
@@ -121,7 +128,7 @@ final class AppModel: ObservableObject {
     }
     var selectedReport: WorktreeReport? { visibleReports.first { $0.id == selection } }
 
-    var groups: [(repo: String, path: String, harness: Harness, reports: [WorktreeReport])] {
+    var groups: [RepoGroup] {
         let grouped = Dictionary(grouping: visibleReports) { $0.worktree.repoPath }
         return grouped.map { path, items in
             let sorted = items.sorted {
@@ -129,7 +136,7 @@ final class AppModel: ObservableObject {
                     ? $0.totalBytes > $1.totalBytes
                     : $0.verdict.order < $1.verdict.order
             }
-            return ((path as NSString).lastPathComponent, path, sorted.first?.worktree.harness ?? .manual, sorted)
+            return RepoGroup(path: path, reports: sorted)
         }
         .sorted { lhs, rhs in
             let left = lhs.reports.reduce(0) { $0 + $1.totalBytes }
