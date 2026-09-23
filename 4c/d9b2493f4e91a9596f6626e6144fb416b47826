@@ -1,0 +1,22 @@
+apps/website/app/page.tsx
+  s_3e3dfec32bf217::t_56e00f8acad02f 152,182,217
+  s_3e3dfec32bf217::t_23e161c09572a4 40-41,44,47,57,92,110,118,140,142-144,148,299-300,303,306
+apps/website/components/CopyCommand.tsx
+  s_3e3dfec32bf217::t_23e161c09572a4 20,27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "4cd9b2493f4e91a9596f6626e6144fb416b47826",
+  "prompts": {},
+  "sessions": {
+    "s_3e3dfec32bf217": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fc78b36b-49ba-4f4d-b965-573ed26d3610",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
