@@ -1,0 +1,25 @@
+.github/workflows/nightly.yml
+  s_3e3dfec32bf217::t_47064abc2bc507 26,38,51
+.github/workflows/website.yml
+  s_3e3dfec32bf217::t_47064abc2bc507 25,36
+.github/workflows/promotion.yml
+  s_3e3dfec32bf217::t_47064abc2bc507 23
+.github/workflows/ci.yml
+  s_3e3dfec32bf217::t_47064abc2bc507 32,46,59,65,80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "4ffc9098dafc4b2bad98965f394b99a93a4ee0f1",
+  "prompts": {},
+  "sessions": {
+    "s_3e3dfec32bf217": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fc78b36b-49ba-4f4d-b965-573ed26d3610",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
