@@ -126,11 +126,19 @@ enum Git {
     }
 
     static func dirtySubmodules(worktree: String) -> [String] {
-        run(["submodule", "status", "--recursive"], in: worktree).lines.compactMap { line in
-            guard let first = line.first, first == "+" || first == "U" else { return nil }
-            let parts = line.dropFirst().split(separator: " ", omittingEmptySubsequences: true)
-            guard parts.count >= 2 else { return nil }
-            return String(parts[1])
+        parseDirtySubmodules(run(["status", "--porcelain=v2", "--ignore-submodules=none"], in: worktree).stdout)
+    }
+
+    static func parseDirtySubmodules(_ porcelain: String) -> [String] {
+        let fieldsBeforePath = ["1": 8, "2": 9, "u": 10]
+        return porcelain.split(separator: "\n").compactMap { line in
+            let kind = String(line.prefix(1))
+            guard let pathIndex = fieldsBeforePath[kind] else { return nil }
+            let fields = line.split(separator: " ", maxSplits: pathIndex, omittingEmptySubsequences: false)
+            guard fields.count > pathIndex else { return nil }
+            let submodule = fields[2]
+            guard submodule.hasPrefix("S"), submodule != "S..." else { return nil }
+            return String(fields[pathIndex].split(separator: "\t").first ?? fields[pathIndex])
         }
     }
 

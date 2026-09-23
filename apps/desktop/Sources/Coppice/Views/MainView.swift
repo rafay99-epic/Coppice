@@ -361,8 +361,32 @@ struct MainView: View {
         .padding(Space.xxl)
     }
 
+    private var subtitle: String {
+        if model.isScanning, model.visibleReports.isEmpty { return "Scanning…" }
+        let count = model.visibleReports.count
+        return "\(count) worktrees · \(Format.bytes(model.totalBytes))"
+    }
+
+    private var filteredGroups: [RepoGroup] {
+        model.groups.compactMap { group in
+            let matching = group.reports.filter { scope.contains($0) && matchesSearch($0) }
+            guard !matching.isEmpty else { return nil }
+            return RepoGroup(path: group.path, reports: matching)
+        }
+    }
+
+    private func matchesSearch(_ report: WorktreeReport) -> Bool {
+        guard !search.isEmpty else { return true }
+        let needle = search.lowercased()
+        return report.worktree.name.lowercased().contains(needle)
+            || report.worktree.displayBranch.lowercased().contains(needle)
+            || report.worktree.repoName.lowercased().contains(needle)
+    }
+}
+
+extension MainView {
     @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
+    var toolbar: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
             Button {
                 withAnimation(.smooth) { columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly }
@@ -430,11 +454,11 @@ struct MainView: View {
         .withoutGlass()
     }
 
-    private var sizingProgress: (done: Int, total: Int) {
+    var sizingProgress: (done: Int, total: Int) {
         (model.visibleReports.filter(\.measured).count, model.visibleReports.count)
     }
 
-    private var activityStatus: some View {
+    var activityStatus: some View {
         let progress = sizingProgress
         return HStack(spacing: Space.s) {
             if model.isScanning {
@@ -455,28 +479,6 @@ struct MainView: View {
         .lineLimit(1)
         .fixedSize()
         .accessibilityElement(children: .combine)
-    }
-
-    private var subtitle: String {
-        if model.isScanning, model.visibleReports.isEmpty { return "Scanning…" }
-        let count = model.visibleReports.count
-        return "\(count) worktrees · \(Format.bytes(model.totalBytes))"
-    }
-
-    private var filteredGroups: [RepoGroup] {
-        model.groups.compactMap { group in
-            let matching = group.reports.filter { scope.contains($0) && matchesSearch($0) }
-            guard !matching.isEmpty else { return nil }
-            return RepoGroup(path: group.path, reports: matching)
-        }
-    }
-
-    private func matchesSearch(_ report: WorktreeReport) -> Bool {
-        guard !search.isEmpty else { return true }
-        let needle = search.lowercased()
-        return report.worktree.name.lowercased().contains(needle)
-            || report.worktree.displayBranch.lowercased().contains(needle)
-            || report.worktree.repoName.lowercased().contains(needle)
     }
 }
 
