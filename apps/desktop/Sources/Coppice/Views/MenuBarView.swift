@@ -174,7 +174,7 @@ struct MenuBarView: View {
                     Button("Prune \(model.prunableReports.count) stale") { Task { await model.prune() } }
                         .disabled(model.prunableReports.isEmpty || model.isWorking)
                     Divider()
-                    SettingsLink { Text("Settings…") }
+                    Button("Settings…") { model.openSettings() }
                     Button("Activity log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
                     Divider()
                     Button("Quit Coppice") { NSApplication.shared.terminate(nil) }

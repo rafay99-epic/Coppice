@@ -275,4 +275,31 @@ final class ParsingTests: XCTestCase {
         XCTAssertFalse(report(headOid: "def456").mergedAtHead, "commits after the merge must not count as merged")
         XCTAssertFalse(report(headOid: nil).mergedAtHead)
     }
+
+    func testDirtySubmodulesComeFromPorcelainV2() {
+        let porcelain = [
+            "1 .M N... 100644 100644 100644 aaa aaa README.md",
+            "1 .M SC.. 160000 160000 160000 bbb bbb vendor/lib",
+            "1 .M S.M. 160000 160000 160000 ccc ccc tools/edited copy",
+            "1 .. S... 160000 160000 160000 ddd ddd clean-module",
+            "? scratch.txt",
+        ].joined(separator: "\n")
+        XCTAssertEqual(Git.parseDirtySubmodules(porcelain), ["vendor/lib", "tools/edited copy"])
+        XCTAssertEqual(Git.parseDirtySubmodules(""), [])
+    }
+}
+
+final class DiagnosticsTests: XCTestCase {
+    func testProblemsKeepsOnlyErrorsAndCrashesNewestFirst() {
+        let log = """
+        2026-09-24T10:00:00Z  Coppice 0.90 (nightly) launched
+        2026-09-24T10:01:00Z  ERROR  git failed  in ~/Code/app
+        2026-09-24T10:02:00Z  Swept 3 worktrees
+        2026-09-24T10:03:00Z  CRASH  Coppice 0.90 stopped on SIGSEGV.
+        """
+        let problems = Diagnostics.problems(in: log)
+        XCTAssertEqual(problems.map(\.kind), ["CRASH", "ERROR"])
+        XCTAssertEqual(problems.last?.message, "git failed  in ~/Code/app")
+        XCTAssertNotNil(problems.first?.date)
+    }
 }

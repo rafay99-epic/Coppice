@@ -228,7 +228,7 @@ final class VerdictTests: XCTestCase {
         XCTAssertTrue(outcome.failures.isEmpty, "\(outcome.failures)")
         XCTAssertFalse(
             FileManager.default.fileExists(atPath: worktreeURL.appending(path: "node_modules").path),
-            "node_modules must be gone"
+            "node_modules must be gone, skipped: \(outcome.skipped)"
         )
         XCTAssertTrue(
             FileManager.default.fileExists(atPath: worktreeURL.appending(path: "src/main.ts").path),

@@ -114,6 +114,17 @@ extension ButtonStyle where Self == QuietButtonStyle {
     static var quiet: QuietButtonStyle { QuietButtonStyle() }
 }
 
+extension ToolbarContent {
+    @ToolbarContentBuilder
+    func withoutGlass() -> some ToolbarContent {
+        if #available(macOS 26, *) {
+            sharedBackgroundVisibility(.hidden)
+        } else {
+            self
+        }
+    }
+}
+
 extension View {
     func numeric<Value: Equatable>(_ value: Value) -> some View {
         contentTransition(.numericText()).animation(.smooth, value: value)
