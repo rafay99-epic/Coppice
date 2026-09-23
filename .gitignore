@@ -19,3 +19,5 @@ apps/desktop/Resources/*.icns
 
 worktree-cleanup-plan.html
 *.tsbuildinfo
+test-results/
+playwright-report/

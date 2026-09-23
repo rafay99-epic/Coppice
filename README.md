@@ -123,11 +123,20 @@ swift test       # run the suite
 ./dev.sh         # build + run "Coppice Dev" locally — your sandbox, never published
 ./nightly.sh     # build + run "Coppice Nightly" locally
 ./make-dmg.sh    # package the installer
+osascript -l JavaScript Scripts/ui-check.js   # read-only UI check of the running Dev app
 ```
 
 Building requires full Xcode, not just Command Line Tools, because SwiftUI's macros ship with the full toolchain.
 
 The website dev server: `cd apps/website && bun run dev`.
+
+Website end-to-end tests run in headless Chrome on port 4390, so they never touch a dev server you already have open:
+
+```sh
+cd apps/website
+bun run test:e2e                                        # builds, serves and tests the static site
+E2E_BASE_URL=http://localhost:3000 bun run test:e2e     # same tests against a running dev server, which also catches hydration warnings
+```
 
 ## Release channels
 
