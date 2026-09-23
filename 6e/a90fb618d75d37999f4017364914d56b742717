@@ -1,0 +1,46 @@
+apps/website/tsconfig.tsbuildinfo
+  s_3e3dfec32bf217::t_1e191727483070 1
+apps/website/components/Grow.tsx
+  s_3e3dfec32bf217::t_3e0bead54fcc97 1-30
+apps/website/app/layout.tsx
+  s_3e3dfec32bf217::t_fc1d1a8a01e6f8 2-3,6-19,21,25,55-59
+apps/website/app/page.tsx
+  s_3e3dfec32bf217::t_549c18bd737335 59
+  s_3e3dfec32bf217::t_4cc9a779b66c79 1,5,14,16-26,35-48,57-58,60-63,65-70,72-73,76,80,84-88,92,98-108,110-112,114-118,124-128,130,132-146,148-155,159-168,170,172-184,186,188,192-195,198,200-220,224-228,230,232-246,248,254-266,268-286,288,294-308
+apps/website/components/Tree.tsx
+  s_3e3dfec32bf217::t_06d5855fd4c043 1-94
+apps/website/components/Mark.tsx
+  s_3e3dfec32bf217::t_d39d7be599c934 3-19
+apps/website/components/CopyCommand.tsx
+  s_3e3dfec32bf217::t_7f7692b78b7a61 19-20,27-28
+apps/website/components/AppMock.tsx
+  s_3e3dfec32bf217::t_d3a6245844465b 1-25,28-30,36,39-46,50-54,57,62,67,70,72,74,79-80,82-83,85,90,92-97,99-112,114-116
+apps/website/app/globals.css
+  s_3e3dfec32bf217::t_b282a4b72bf9c8 5-11,13-14,16,34,38-43,46-48,51-53,55-62,67-89,91,94-100,102-115,119,122,130,132,135,139-141,143-147,150-156,158,161-162,164,167-168,170,173-176,179-204,211-222,224-228
+  s_3e3dfec32bf217::t_3f46baad37de72 229-231
+  s_3e3dfec32bf217::t_e79eb0b04e255a 63-66
+apps/website/public/icon.svg
+  s_3e3dfec32bf217::t_d39d7be599c934 2-9
+apps/website/package.json
+  s_3e3dfec32bf217::t_0f0c26d798bfde 12-14,17-22
+bun.lock
+  s_3e3dfec32bf217::t_9275dfc46e297b 8-9,16-18,21-26,37,39,41,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71,73,75,77,79,81,83,85,87,99,101,103,105,107,109,111,113,115,149,151,153,155,157,159,161,163,165-205,251,257,259,261,265,277,279,281
+package.json
+  s_3e3dfec32bf217::t_4f65fc4fde898c 18-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6ea90fb618d75d37999f4017364914d56b742717",
+  "prompts": {},
+  "sessions": {
+    "s_3e3dfec32bf217": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fc78b36b-49ba-4f4d-b965-573ed26d3610",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}

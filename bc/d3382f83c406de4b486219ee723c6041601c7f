@@ -1,0 +1,34 @@
+apps/desktop/Sources/Coppice/Services/GitHub.swift
+  s_3e3dfec32bf217::t_47e5e5edf9200b 15,58,78-79,99
+apps/desktop/Sources/Coppice/Models/AppModel.swift
+  s_3e3dfec32bf217::t_47e5e5edf9200b 191,276,301
+  s_3e3dfec32bf217::t_8b5b5fee37c62d 102,183,185,227-230,248,330-339,341,354-357,368,370-371,399
+apps/desktop/Sources/Coppice/Services/Sweeper.swift
+  s_3e3dfec32bf217::t_47e5e5edf9200b 125,179
+  s_3e3dfec32bf217::t_fc9c5189bdfd54 165-167
+apps/desktop/Sources/Coppice/Services/ProcessProbe.swift
+  s_3e3dfec32bf217::t_fc9c5189bdfd54 45-48
+apps/desktop/Sources/Coppice/Models/Worktree.swift
+  s_3e3dfec32bf217::t_47e5e5edf9200b 215-218
+  s_3e3dfec32bf217::t_4d03b73c0980b1 57-58,76-77
+apps/desktop/Sources/Coppice/Services/WorktreeScanner.swift
+  s_3e3dfec32bf217::t_c63470f5119bd3 44-48
+apps/desktop/Tests/CoppiceTests/ParsingTests.swift
+  s_3e3dfec32bf217::t_9f87aa708ddf5e 262-275
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "bcd3382f83c406de4b486219ee723c6041601c7f",
+  "prompts": {},
+  "sessions": {
+    "s_3e3dfec32bf217": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fc78b36b-49ba-4f4d-b965-573ed26d3610",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
