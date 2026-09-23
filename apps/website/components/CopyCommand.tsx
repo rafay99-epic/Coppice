@@ -17,14 +17,14 @@ export function CopyCommand({ command }: { command: string }) {
 
   return (
     <div className="flex min-w-0 items-center gap-3 border-b border-line py-3 transition-colors hover:border-label-3">
-      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[14px] text-label-2">
+      <code className="min-w-0 flex-1 text-[13px] leading-relaxed text-label-2 [overflow-wrap:anywhere] sm:overflow-x-auto sm:whitespace-nowrap sm:text-[14px] sm:[overflow-wrap:normal]">
         {command}
       </code>
       <button
         type="button"
         onClick={copy}
         aria-label={`Copy: ${command}`}
-        className={`shrink-0 rounded-full px-3.5 py-1 text-[13px] font-medium transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+        className={`shrink-0 self-start rounded-full px-4 py-2 text-[13px] sm:self-auto sm:py-1 font-medium transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
           copied ? "bg-white text-black" : "bg-surface-3 text-label hover:bg-label-3"
         }`}
       >

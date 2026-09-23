@@ -37,14 +37,14 @@ function Nav() {
         <Mark size={18} />
         <span className="font-semibold">Coppice</span>
       </a>
-      <div className="flex items-center gap-6 text-[14px] text-label-2">
-        <a href="#never" className="link hidden hover:text-label sm:inline">
+      <div className="-mr-2 flex items-center gap-2 text-[14px] text-label-2 sm:gap-4">
+        <a href="#never" className="link hidden px-2 py-3 hover:text-label sm:inline">
           Safety
         </a>
-        <a href={REPO} className="link hover:text-label">
+        <a href={REPO} className="link px-2 py-3 hover:text-label">
           GitHub
         </a>
-        <a href="#install" className="link text-label">
+        <a href="#install" className="link px-2 py-3 text-label">
           Install
         </a>
       </div>
@@ -54,7 +54,7 @@ function Nav() {
 
 function Hero() {
   return (
-    <section id="top" className="mx-auto max-w-6xl px-4 pt-10 pb-24 sm:px-6 sm:pt-20">
+    <section id="top" className="mx-auto max-w-6xl px-4 pt-8 pb-12 sm:px-6 sm:pt-20 sm:pb-24">
       <div className="grid items-end gap-10 lg:grid-cols-[1.1fr_1fr]">
         <div className="min-w-0">
           <h1 className="display intro text-[clamp(3rem,9vw,6.5rem)]">
@@ -89,7 +89,7 @@ function Hero() {
             </p>
           </div>
         </div>
-        <Tree className="mx-auto w-full max-w-[34rem]" />
+        <Tree className="mx-auto w-full max-w-[17rem] sm:max-w-[34rem]" />
       </div>
     </section>
   );
@@ -107,7 +107,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section id={id} className="px-4 py-20 sm:px-6 sm:py-28 lg:grid lg:grid-cols-[7rem_1fr] lg:gap-6">
+    <section id={id} className="px-4 py-14 sm:px-6 sm:py-28 lg:grid lg:grid-cols-[7rem_1fr] lg:gap-6">
       <div className="hidden lg:block">
         <Sprout variant={variant} />
       </div>
@@ -115,7 +115,7 @@ function Section({
         <h2 className="display reveal text-[clamp(2.25rem,5.5vw,4rem)]" data-grow>
           {title}
         </h2>
-        <div className="mt-12">{children}</div>
+        <div className="mt-8 sm:mt-12">{children}</div>
       </div>
     </section>
   );
@@ -137,19 +137,19 @@ function Mess() {
         </>
       }
     >
-      <div className="grid gap-10 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-4 sm:gap-10">
         {MESS.map(([value, label]) => (
-          <div key={label} className="reveal border-t border-line pt-5" data-grow>
-            <div className="display text-[clamp(3rem,7vw,4.75rem)]">{value}</div>
-            <div className="mt-2 text-label-2">{label}</div>
+          <div key={label} className="reveal border-t border-line pt-4 sm:pt-5" data-grow>
+            <div className="display text-[clamp(1.9rem,7vw,4.75rem)] whitespace-nowrap">{value}</div>
+            <div className="mt-1 text-[14px] text-label-2 sm:mt-2 sm:text-base">{label}</div>
           </div>
         ))}
       </div>
-      <p className="reveal mt-14 max-w-[56ch] text-[18px] leading-relaxed text-label-2" data-grow>
+      <p className="reveal mt-10 max-w-[56ch] text-[17px] leading-relaxed text-label-2 sm:mt-14 sm:text-[18px]" data-grow>
         You try something in a worktree, the branch merges, the folder stays. Run four
         agents at once and the disk fills with work you already finished.
       </p>
-      <div className="reveal mt-16" data-grow>
+      <div className="reveal mt-10 sm:mt-16" data-grow>
         <AppMock />
       </div>
     </Section>
@@ -179,7 +179,7 @@ function Ways() {
     >
       <div className="divide-y divide-line border-y border-line">
         {WAYS.map(([name, text]) => (
-          <div key={name} className="reveal grid gap-3 py-8 sm:grid-cols-[12rem_1fr]" data-grow>
+          <div key={name} className="reveal grid gap-2 py-6 sm:gap-3 sm:py-8 sm:grid-cols-[12rem_1fr]" data-grow>
             <div className="display text-[32px]">{name}</div>
             <p className="max-w-[52ch] text-[18px] leading-relaxed text-label-2">{text}</p>
           </div>
@@ -214,7 +214,7 @@ function Never() {
           </li>
         ))}
       </ol>
-      <p className="reveal mt-12 max-w-[52ch] text-[17px] text-label-2" data-grow>
+      <p className="reveal mt-10 max-w-[52ch] text-[17px] text-label-2 sm:mt-12" data-grow>
         Every check runs again the moment you click, not when the list was built.
       </p>
     </Section>
@@ -296,14 +296,14 @@ function Footer() {
         <Mark size={16} />
         <span>Coppice. MIT, Syntax Lab Technology.</span>
       </div>
-      <div className="flex gap-6">
-        <a href={REPO} className="link hover:text-label">
+      <div className="-ml-2 flex gap-2 sm:gap-4">
+        <a href={REPO} className="link px-2 py-3 hover:text-label">
           Source
         </a>
-        <a href={`${REPO}/releases`} className="link hover:text-label">
+        <a href={`${REPO}/releases`} className="link px-2 py-3 hover:text-label">
           Releases
         </a>
-        <a href={`${REPO}/issues`} className="link hover:text-label">
+        <a href={`${REPO}/issues`} className="link px-2 py-3 hover:text-label">
           Issues
         </a>
       </div>
