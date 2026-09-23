@@ -1,12 +1,5 @@
 name: Promote nightly to stable
 
-# Stable moves only through this workflow. Run it by hand when nightly has been
-# quiet for long enough to trust, which keeps the Stable channel a decision
-# rather than a side effect of merging.
-#
-# The promotion is a squash: main gets one commit per promotion, so the version
-# (commit count) increments once and the release notes are the grouped changelog
-# rather than every intermediate merge.
 on:
   workflow_dispatch:
     inputs:
@@ -25,9 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      # Dispatching ci.yml needs this. Without it the push lands and the
-      # release never builds, with a 403 buried at the end of a step that
-      # otherwise reports success.
       actions: write
     steps:
       - uses: actions/checkout@v5
@@ -64,10 +54,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           git merge --squash nightly
-          # `-F` already suppresses the editor, so no --edit flag is needed.
-          # `--edit=false` is not valid git syntax and fails the step *after*
-          # the squash has staged everything, which reads as "nothing staged"
-          # when in fact everything was.
           if git diff --cached --quiet; then
             echo "::error::squash staged nothing, so there is nothing to promote"
             exit 1
@@ -75,8 +61,6 @@ jobs:
           git commit --file /tmp/notes.md
           git push origin main
 
-          # Kick CI explicitly. The push above used GITHUB_TOKEN, and GitHub
-          # suppresses `push` events for those, so nothing would build.
           gh workflow run ci.yml --ref main
           echo "::notice::Promoted nightly → main and started the release build."
 

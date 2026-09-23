@@ -1,11 +1,5 @@
 name: Nightly
 
-# Every merge into `nightly` publishes a rolling pre-release that Nightly users
-# auto-update from. Same gate as CI: tests and lint run first, and the publish
-# step depends on them, so a red test never reaches a Nightly user either.
-#
-# Nightly releases all share one tag (`nightly`) and are ordered by CI run
-# number rather than version, because several can share a commit count.
 on:
   push:
     branches: [nightly]
@@ -77,8 +71,6 @@ jobs:
           ./build.sh
           ./make-dmg.sh
 
-      # One rolling tag. Delete and recreate so the `nightly` tag always points
-      # at the newest pre-release and the updater has a single feed to follow.
       - name: Publish pre-release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -98,9 +90,5 @@ jobs:
             echo "::warning::TAP_TOKEN not set — skipping cask bump."
             exit 0
           fi
-          # The cask version is the CI build number, not the commit count.
-          # Nightly publishes to one rolling tag, and several nightly builds can
-          # share a commit count — so using it would leave the cask version
-          # unchanged and Homebrew would never offer the upgrade.
           VERSION="$BUILD" CASK=coppice-nightly \
             bash "$GITHUB_WORKSPACE/.github/scripts/bump-cask.sh" "$PWD/build/Coppice-Nightly.dmg"

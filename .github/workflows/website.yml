@@ -1,7 +1,5 @@
 name: Website
 
-# The site has its own workflow so a copy change never triggers a macOS runner,
-# and a desktop change never rebuilds the site.
 on:
   push:
     branches: [main, nightly]

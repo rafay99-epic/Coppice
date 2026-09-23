@@ -1,14 +1,5 @@
 name: CI
 
-# Desktop-app CI and release in one pipeline, so the build users receive is the
-# exact one that passed every check. Test and lint are the gate: on `main` the
-# release builds and publishes only after both pass; on PRs the DMG builds and
-# uploads as an artifact instead. The release-config compile happens inside
-# those build steps (build.sh), so no separate job recompiles the same thing.
-#
-# Why not a separate release workflow: two workflows each run their own
-# `swift test`, and a flaky test can pass in one while failing the other, which
-# is how a red build reaches users. Here one test run gates the publish step.
 on:
   push:
     branches: [main]
@@ -23,15 +14,8 @@ on:
       - ".github/workflows/ci.yml"
       - ".github/scripts/**"
       - ".swiftlint.yml"
-  # Promotion pushes to main with GITHUB_TOKEN, and GitHub deliberately does
-  # not raise `push` events for those, to stop a workflow triggering itself
-  # forever. So a promoted commit would sit on main and never ship. Dispatch
-  # is exempt from that rule, so promotion.yml calls this workflow directly.
-  # It also means a release can be re-cut by hand when one is needed.
   workflow_dispatch:
 
-# PRs cancel superseded runs; main never cancels, so pushes serialize and two
-# releases cannot race to publish the same version.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -48,8 +32,6 @@ jobs:
       - uses: actions/checkout@v5
       - name: Swift version
         run: swift --version
-      # The verdict tests build real git repositories, and git refuses to commit
-      # without an identity.
       - name: Configure git identity
         run: |
           git config --global user.email "ci@example.com"
@@ -68,9 +50,6 @@ jobs:
         working-directory: .
         run: swiftlint --strict --reporter github-actions-logging
 
-  # PR only: build and package the DMG so a reviewer can install the change.
-  # This IS the release-config build check — build.sh runs the arm64 release
-  # build, so a separate job would just compile the same thing again.
   package:
     name: Build & package DMG
     if: github.event_name == 'pull_request'
@@ -88,10 +67,6 @@ jobs:
           name: Coppice-dmg
           path: apps/desktop/build/Coppice.dmg
 
-  # main only: build and publish the GitHub Release (version = commit count).
-  # `needs: [test, lint]` gates it, so if either fails this job is skipped and
-  # nothing is built or published. A failing build.sh here fails the job before
-  # `gh release create` runs, so a broken compile cannot publish either.
   release:
     name: Build and publish release
     if: >-
@@ -109,10 +84,6 @@ jobs:
       - name: Compute version
         run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
 
-      # Import the stable self-signed cert so this release shares one signature
-      # with every prior release, and users keep their Full Disk Access grant
-      # across the auto-update. Push-to-main only, so a fork PR never reaches
-      # here and the secret cannot leak. No secret means an ad-hoc build.
       - name: Set up stable code-signing certificate
         env:
           MACOS_SIGN_CERT_P12: ${{ secrets.MACOS_SIGN_CERT_P12 }}
@@ -133,10 +104,6 @@ jobs:
             --title "Coppice $VERSION" \
             --generate-notes
 
-      # Keep the Homebrew cask in sync. The stable `coppice` cask is
-      # version-pinned, so this pushes the new version and DMG sha256 to the tap.
-      # Needs a TAP_TOKEN secret; skips with a warning if absent so a missing
-      # secret never fails the release.
       - name: Bump Homebrew cask
         env:
           TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
