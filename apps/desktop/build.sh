@@ -52,6 +52,10 @@ APP="build/$APP_NAME.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BINARY" "$APP/Contents/MacOS/Coppice"
+MIN_OS="$(vtool -show-build "$BINARY" | awk '/minos/ {print $2; exit}')"
+SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+vtool -set-build-version macos "$MIN_OS" "$SDK_VERSION" -replace -output "$APP/Contents/MacOS/Coppice" "$APP/Contents/MacOS/Coppice"
+echo "Build version: macOS $MIN_OS, SDK $SDK_VERSION"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
 PB=/usr/libexec/PlistBuddy
