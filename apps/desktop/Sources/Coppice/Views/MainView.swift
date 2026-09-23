@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// What the sidebar is filtering the list down to.
 enum Scope: Hashable {
     case all
     case sweepable
-    case needsAttention
+    case hasWork
     case stale
     case harness(Harness)
 
@@ -12,9 +11,19 @@ enum Scope: Hashable {
         switch self {
         case .all: return "All Worktrees"
         case .sweepable: return "Safe to Sweep"
-        case .needsAttention: return "Needs Attention"
+        case .hasWork: return "Has Work"
         case .stale: return "Stale"
         case .harness(let harness): return harness.displayName
+        }
+    }
+
+    func contains(_ report: WorktreeReport) -> Bool {
+        switch self {
+        case .all: return true
+        case .sweepable: return report.verdict.canSweep && report.artifactBytes > 0
+        case .hasWork: return report.verdict.status == .hasWork
+        case .stale: return report.verdict == .prunable || report.verdict == .orphan
+        case .harness(let harness): return report.worktree.harness == harness
         }
     }
 
@@ -22,19 +31,13 @@ enum Scope: Hashable {
         switch self {
         case .all: return "square.stack.3d.up"
         case .sweepable: return "scissors"
-        case .needsAttention: return "lock"
+        case .hasWork: return "pencil.circle"
         case .stale: return "clock.arrow.circlepath"
         case .harness(let harness): return harness.symbol
         }
     }
 }
 
-/// The main window: source list, worktree list, inspector.
-///
-/// The standard three-pane Mac shape (Mail, Finder, Xcode) rather than a bespoke
-/// layout, so the window behaves the way the rest of the system does. Sidebar
-/// collapsing, inspector toggling, selection, search and keyboard navigation all
-/// come from the framework instead of being reinvented.
 struct MainView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
@@ -42,7 +45,9 @@ struct MainView: View {
     @State private var scope: Scope = .all
     @State private var showInspector = true
     @State private var search = ""
-    @State private var confirmingSweep = false
+    @AppStorage("dismissedDiskAccess") private var dismissedDiskAccess = false
+    @FocusState private var listFocused: Bool
+    @State private var dismissedFailures: Set<String> = []
 
     var body: some View {
         NavigationSplitView {
@@ -51,56 +56,104 @@ struct MainView: View {
             detail
         }
         .navigationTitle("Coppice")
-        .navigationSubtitle(subtitle)
+        .toolbar(removing: .title)
+        .font(.ui)
     }
 
-    // MARK: Sidebar
-
     private var sidebar: some View {
-        List(selection: $scope) {
+        List {
             Section {
                 sidebarRow(.all, count: model.visibleReports.count)
                 sidebarRow(.sweepable, count: model.sweepCandidates.count)
-                sidebarRow(.needsAttention, count: model.protectedCount)
-                sidebarRow(.stale, count: model.prunableReports.count)
+                sidebarRow(.hasWork, count: model.hasWorkCount)
+                sidebarRow(.stale, count: model.visibleReports.filter { Scope.stale.contains($0) }.count)
             }
 
-            Section("Created By") {
+            Section {
                 ForEach(model.presentHarnesses, id: \.self) { harness in
                     sidebarRow(
                         .harness(harness),
                         count: model.visibleReports.filter { $0.worktree.harness == harness }.count
                     )
                 }
+            } header: {
+                SectionLabel("Created by")
+                    .padding(.top, Space.l)
+                    .padding(.leading, Space.s)
             }
         }
         .listStyle(.sidebar)
-        .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 280)
+        .scrollContentBackground(.hidden)
+        .background(.black)
+        .navigationSplitViewColumnWidth(min: 240, ideal: 250, max: 320)
     }
 
-    private func sidebarRow(_ scope: Scope, count: Int) -> some View {
-        Label(scope.title, systemImage: scope.symbol)
-            .badge(count)
-            .tag(scope)
+    private func sidebarRow(_ row: Scope, count: Int) -> some View {
+        let selected = scope == row
+        return Button {
+            scope = row
+        } label: {
+            HStack(spacing: Space.m) {
+                Image(systemName: row.symbol)
+                    .frame(width: 18)
+                    .foregroundStyle(selected ? .primary : .tertiary)
+                Text(row.title)
+                    .foregroundStyle(selected ? .primary : .secondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                Spacer(minLength: Space.xs)
+                Text("\(count)")
+                    .font(.uiCaption)
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                    .numeric(count)
+                    .fixedSize()
+            }
+            .font(.ui.weight(selected ? .medium : .regular))
+            .padding(.horizontal, Space.s)
+            .padding(.vertical, 7)
+            .contentShape(.rect)
+            .background(.white.opacity(selected ? 0.12 : 0), in: .rect(cornerRadius: 6))
+            .animation(.snappy(duration: 0.2), value: selected)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(row.title)
+        .accessibilityValue("\(count) worktrees")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .listRowInsets(EdgeInsets(top: 1, leading: Space.s, bottom: 1, trailing: Space.s))
     }
-
-    // MARK: Detail
 
     private var detail: some View {
         VStack(spacing: 0) {
+            if !model.unreadableRoots.isEmpty, !dismissedDiskAccess {
+                diskAccessBanner
+                Divider()
+            }
+
+            if let failures = visibleFailures {
+                BannerView(banner: failures) {
+                    withAnimation { dismissedFailures.formUnion(model.scanFailures.map(\.id)) }
+                }
+                .padding(.horizontal, Space.xl)
+                .padding(.top, Space.m)
+            }
+
             if let banner = model.banner {
                 BannerView(banner: banner) {
                     withAnimation { model.banner = nil }
                 }
+                .padding(.horizontal, Space.xl)
+                .padding(.top, Space.m)
+            }
+
+            if model.activity.isMutating {
+                ActivityBar(activity: model.activity)
+                    .padding(.horizontal, Space.xl)
+                    .padding(.vertical, Space.m)
                 Divider()
             }
 
-            if model.activity.isBusy {
-                ActivityBar(activity: model.activity)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                Divider()
-            }
+            header
 
             if filteredGroups.isEmpty {
                 emptyState
@@ -109,17 +162,18 @@ struct MainView: View {
                 worktreeList
             }
         }
-        .animation(.default, value: model.banner)
-        .animation(.default, value: model.activity.isBusy)
+        .background(.black)
+        .animation(.smooth, value: model.banner)
+        .animation(.smooth, value: model.activity.isMutating)
         .searchable(text: $search, placement: .toolbar, prompt: "Filter worktrees")
         .toolbar { toolbar }
         .inspector(isPresented: $showInspector) {
             InspectorView()
-                .inspectorColumnWidth(min: 270, ideal: 310, max: 400)
+                .inspectorColumnWidth(min: 290, ideal: 330, max: 420)
         }
         .confirmationDialog(
             "Sweep build artifacts in \(model.sweepCandidates.count) worktrees?",
-            isPresented: $confirmingSweep,
+            isPresented: $model.confirmingSweep,
             titleVisibility: .visible
         ) {
             Button("Sweep \(Format.bytes(model.reclaimableBytes))") {
@@ -131,47 +185,178 @@ struct MainView: View {
         }
     }
 
+    private var visibleFailures: Banner? {
+        let fresh = model.scanFailures.filter { !dismissedFailures.contains($0.id) }
+        guard !fresh.isEmpty else { return nil }
+        let count = fresh.count
+        return Banner(
+            kind: .warning,
+            title: "Couldn't read \(count) repositor\(count == 1 ? "y" : "ies")",
+            message: "They were skipped in this scan. The log has the git error.",
+            details: fresh
+        )
+    }
+
+    private var unreadableList: String {
+        model.unreadableRoots.map { ($0 as NSString).abbreviatingWithTildeInPath }.joined(separator: ", ")
+    }
+
+    private var diskAccessBanner: some View {
+        HStack(spacing: Space.m) {
+            Image(systemName: "lock.shield").foregroundStyle(.secondary)
+            Text("Coppice can't read \(unreadableList). Allow Full Disk Access to include it.")
+                .font(.uiCallout)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button("Open Privacy Settings") {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .controlSize(.small)
+            Button {
+                dismissedDiskAccess = true
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .accessibilityLabel("Dismiss")
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help("Dismiss")
+        }
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.m)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Text(scope.title)
+                .font(.display(30))
+                .contentTransition(.opacity)
+                .animation(.smooth, value: scope)
+            Text(subtitle)
+                .font(.uiCallout)
+                .foregroundStyle(.secondary)
+                .numeric(subtitle)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Space.xl)
+        .padding(.top, Space.l)
+        .padding(.bottom, Space.s)
+    }
+
     private var worktreeList: some View {
-        List(selection: $model.selection) {
-            ForEach(filteredGroups, id: \.repo) { group in
-                Section {
-                    ForEach(group.reports) { report in
-                        WorktreeRow(report: report).tag(report.id)
-                    }
-                } header: {
-                    HStack {
+        ScrollViewReader { proxy in
+            List {
+                ForEach(filteredGroups, id: \.path) { group in
+                    HStack(alignment: .firstTextBaseline) {
                         Text(group.repo)
+                            .font(.heading(15, italic: true))
+                            .foregroundStyle(.secondary)
                         Spacer()
-                        Text(Format.compactBytes(group.reports.reduce(0) { $0 + $1.totalBytes }))
-                            .foregroundStyle(.tertiary)
-                            .monospacedDigit()
+                        Text(
+                            group.reports.contains(where: \.measured)
+                                ? Format.compactBytes(group.reports.reduce(0) { $0 + $1.totalBytes })
+                                : "…"
+                        )
+                        .font(.uiCaption)
+                        .foregroundStyle(.tertiary)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    }
+                    .padding(.top, Space.xl)
+                    .padding(.bottom, Space.xs)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 0, leading: Space.xl, bottom: 0, trailing: Space.xl))
+                    ForEach(group.reports) { report in
+                        let selected = model.selection == report.id
+                        WorktreeRow(report: report)
+                            .id(report.id)
+                            .contentShape(.rect)
+                            .onTapGesture { select(report.id) }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(report.accessibilitySummary)
+                            .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+                            .accessibilityAction { select(report.id) }
+                            .listRowInsets(EdgeInsets(top: 0, leading: Space.xl, bottom: 0, trailing: Space.xl))
+                            .listRowSeparatorTint(.white.opacity(0.06))
+                            .listRowBackground(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(.white.opacity(selected ? 0.1 : 0))
+                                    .padding(.horizontal, Space.s)
+                                    .animation(.snappy(duration: 0.2), value: selected)
+                            )
                     }
                 }
             }
+            .listStyle(.inset)
+            .scrollContentBackground(.hidden)
+            .background(.black)
+            .focusable()
+            .focused($listFocused)
+            .focusEffectDisabled()
+            .onKeyPress(.upArrow) { moveSelection(by: -1) }
+            .onKeyPress(.downArrow) { moveSelection(by: 1) }
+            .animation(.smooth, value: filteredGroups.flatMap { $0.reports.map(\.id) })
+            .onChange(of: model.selection) { _, id in
+                guard let id else { return }
+                withAnimation(.smooth) { proxy.scrollTo(id) }
+            }
+            .onChange(of: filteredGroups.flatMap { $0.reports.map(\.id) }) { _, ids in
+                if let selection = model.selection, !ids.contains(selection) { model.selection = nil }
+            }
         }
-        .listStyle(.inset)
-        .alternatingRowBackgrounds()
+    }
+
+    private func select(_ id: String) {
+        model.selection = id
+        listFocused = true
+    }
+
+    private func moveSelection(by offset: Int) -> KeyPress.Result {
+        let ids = filteredGroups.flatMap { $0.reports.map(\.id) }
+        guard !ids.isEmpty else { return .ignored }
+        let current = model.selection.flatMap { ids.firstIndex(of: $0) }
+        let next = current.map { min(max($0 + offset, 0), ids.count - 1) } ?? 0
+        model.selection = ids[next]
+        return .handled
+    }
+
+    private var foundNothing: Bool {
+        !model.isScanning && search.isEmpty && model.visibleReports.isEmpty
+    }
+
+    private var emptyTitle: String {
+        if model.isScanning { return "Looking around." }
+        if !search.isEmpty { return "No matches." }
+        return foundNothing ? "Nothing to cut back." : "All clear here."
+    }
+
+    private var emptyDetail: String {
+        if model.isScanning { return "Reading git metadata across your folders." }
+        if !search.isEmpty { return "Nothing matches that filter." }
+        return foundNothing ? "Coppice checks your code folders and agent directories." : "No worktrees in \(scope.title)."
     }
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label(
-                model.isScanning ? "Scanning" : "No Worktrees",
-                systemImage: model.isScanning ? "arrow.triangle.2.circlepath" : "square.stack.3d.up.slash"
-            )
-        } description: {
-            if model.isScanning {
-                Text("Reading git metadata across your scan folders.")
-            } else if !search.isEmpty {
-                Text("Nothing matches that filter.")
-            } else {
-                Text("Coppice looks in your code folders and in the agent worktree directories.")
-            }
-        } actions: {
-            if !model.isScanning, search.isEmpty {
-                SettingsLink { Text("Open Settings…") }
+        VStack(spacing: Space.l) {
+            GrowingStump(lineWidth: 1.2)
+                .frame(height: 110)
+                .foregroundStyle(.secondary)
+            Text(emptyTitle)
+                .font(.display(26, italic: true))
+            Text(emptyDetail)
+                .font(.uiCallout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            if foundNothing {
+                SettingsLink { Text("Open Settings") }
+                    .buttonStyle(.mono)
+                    .padding(.top, Space.s)
             }
         }
+        .padding(Space.xxl)
     }
 
     @ToolbarContentBuilder
@@ -185,36 +370,32 @@ struct MainView: View {
         }
 
         ToolbarItem(placement: .status) {
-            // Sizing runs after the list is already usable, so it gets a quiet
-            // indicator rather than blocking the window behind a spinner.
             if model.isScanning || model.isMeasuring {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text(model.isScanning ? "Scanning" : "Sizing")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text(model.isScanning ? "Scanning" : "Sizing")
+                    .font(.uiCaption)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
             }
         }
 
         ToolbarItem(placement: .primaryAction) {
             Button {
-                confirmingSweep = true
+                model.confirmingSweep = true
             } label: {
                 Label(
                     model.reclaimableBytes > 0 ? "Sweep \(Format.compactBytes(model.reclaimableBytes))" : "Sweep",
                     systemImage: "scissors"
                 )
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.mono)
+            .labelStyle(.titleAndIcon)
+            .contentTransition(.numericText())
+            .animation(.smooth, value: model.reclaimableBytes)
             .disabled(model.sweepCandidates.isEmpty || model.isWorking)
             .help("Delete regenerable build output. Reversible by reinstalling.")
         }
 
         ToolbarItem(placement: .primaryAction) {
-            // Settings belong in the window too, not only behind the menu bar
-            // item. Someone working in the window should not have to go hunting
-            // in the status bar to change a scan folder.
             SettingsLink {
                 Label("Settings", systemImage: "gearshape")
             }
@@ -229,8 +410,6 @@ struct MainView: View {
         }
     }
 
-    // MARK: Data
-
     private var subtitle: String {
         if model.isScanning, model.visibleReports.isEmpty { return "Scanning…" }
         let count = model.visibleReports.count
@@ -239,22 +418,11 @@ struct MainView: View {
         return "\(count) worktrees · \(Format.bytes(model.totalBytes))\(sizing)"
     }
 
-    /// Groups after the sidebar scope and the search field have both been applied.
-    private var filteredGroups: [(repo: String, harness: Harness, reports: [WorktreeReport])] {
+    private var filteredGroups: [RepoGroup] {
         model.groups.compactMap { group in
-            let matching = group.reports.filter { matchesScope($0) && matchesSearch($0) }
+            let matching = group.reports.filter { scope.contains($0) && matchesSearch($0) }
             guard !matching.isEmpty else { return nil }
-            return (group.repo, group.harness, matching)
-        }
-    }
-
-    private func matchesScope(_ report: WorktreeReport) -> Bool {
-        switch scope {
-        case .all: return true
-        case .sweepable: return report.verdict.canSweep && report.artifactBytes > 0
-        case .needsAttention: return !report.verdict.canRemove
-        case .stale: return report.verdict == .prunable || report.verdict == .orphan
-        case .harness(let harness): return report.worktree.harness == harness
+            return RepoGroup(path: group.path, reports: matching)
         }
     }
 
@@ -267,45 +435,50 @@ struct MainView: View {
     }
 }
 
-/// One worktree. Name and branch lead, size and verdict trail.
+extension WorktreeReport {
+    var accessibilitySummary: String {
+        let size = measured ? Format.bytes(totalBytes) : "size pending"
+        return "\(worktree.name), \(worktree.displayBranch), \(size), \(verdict.shortLabel)"
+    }
+}
+
 struct WorktreeRow: View {
     let report: WorktreeReport
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: report.verdict.symbol)
-                .foregroundStyle(report.verdict.tint)
-                .frame(width: 16)
-
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(spacing: Space.l) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(report.worktree.name)
+                    .font(.ui.weight(.medium))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(report.worktree.displayBranch)
-                    .font(.caption)
+                    .font(.uiCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: Space.s)
 
             if report.artifactBytes > 0 {
                 Text(Format.compactBytes(report.artifactBytes))
-                    .font(.caption)
+                    .font(.uiCaption)
                     .monospacedDigit()
-                    .foregroundStyle(.green)
-                    .help("Regenerable build output — this is what a sweep frees")
+                    .foregroundStyle(.tertiary)
+                    .numeric(report.artifactBytes)
+                    .help("Build output a sweep frees")
             }
 
-            Text(report.measured ? Format.compactBytes(report.totalBytes) : "—")
+            Text(report.measured ? Format.compactBytes(report.totalBytes) : "…")
                 .monospacedDigit()
+                .numeric(report.totalBytes)
                 .foregroundStyle(report.measured ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
-                .frame(width: 66, alignment: .trailing)
+                .frame(width: 72, alignment: .trailing)
 
             VerdictBadge(verdict: report.verdict)
-                .frame(width: 100, alignment: .leading)
+                .frame(width: 96, alignment: .leading)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Space.m)
     }
 }

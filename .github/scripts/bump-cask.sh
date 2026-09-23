@@ -1,17 +1,4 @@
 #!/usr/bin/env bash
-#
-# Bump a Homebrew cask in the rafay99-epic/homebrew-apps tap to a freshly
-# published release, so the tap never goes stale and nobody hand-edits a sha256.
-#
-# Both casks are version-pinned (version "…" / sha256 "…"), so each release
-# rewrites those two lines. Sibling repos releasing at the same time touch
-# different cask files, so the only contention is a non-fast-forward push, which
-# the retry loop handles by re-syncing.
-#
-# Usage:  VERSION=0.13 CASK=coppice TAP_TOKEN=… bump-cask.sh /abs/path/App.dmg
-#
-# Requires git and shasum. TAP_TOKEN is a fine-grained PAT with Contents:
-# Read & Write on rafay99-epic/homebrew-apps. Runs on a macOS runner (BSD sed).
 set -euo pipefail
 
 VERSION="${VERSION:?VERSION env var required}"
@@ -32,8 +19,6 @@ cd "$WORK"
 CASK_FILE="Casks/${CASK}.rb"
 [ -f "$CASK_FILE" ] || { echo "::error::${CASK_FILE} not found in tap"; exit 1; }
 
-# Rewrite only the two pinned lines in the top stanza, anchored to a 2-space
-# indent so url/livecheck/etc. are never touched.
 sed -i '' -E \
   -e "s|^  version \"[^\"]*\"|  version \"${VERSION}\"|" \
   -e "s|^  sha256 \"[0-9a-f]*\"|  sha256 \"${SHA}\"|" \

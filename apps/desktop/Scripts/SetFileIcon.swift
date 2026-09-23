@@ -1,9 +1,4 @@
 #!/usr/bin/env swift
-// Stamps a custom Finder icon onto a file (used for the .dmg).
-//   swift Scripts/SetFileIcon.swift <target> <icon.icns>
-//
-// Best effort: a headless runner without a window server cannot set this, and
-// the DMG installs fine either way, so failure is not fatal for the build.
 
 import AppKit
 

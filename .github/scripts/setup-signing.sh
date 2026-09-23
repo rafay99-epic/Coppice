@@ -1,13 +1,4 @@
 #!/bin/bash
-# CI: import the stable self-signed signing cert into a throwaway keychain and
-# export CODESIGN_IDENTITY (which build.sh reads) so released builds carry one
-# stable signature. That keeps users' TCC grants (Full Disk Access) and
-# Gatekeeper identity across auto-updates instead of resetting them each release.
-#
-# MUST run only in a trusted context (push to a protected branch), NEVER in a
-# pull_request job: a PR from a fork could read the secret. If the secrets are
-# absent it warns and exits 0, so the build falls back to ad-hoc and a missing
-# secret never fails a release.
 set -euo pipefail
 
 if [ -z "${MACOS_SIGN_CERT_P12:-}" ] || [ -z "${MACOS_SIGN_CERT_PASSWORD:-}" ]; then
@@ -18,8 +9,6 @@ fi
 KEYCHAIN="$RUNNER_TEMP/app-signing.keychain-db"
 KEYCHAIN_PW="$(openssl rand -base64 24)"
 CERT_P12="$RUNNER_TEMP/app-signing.p12"
-# Guarantee the decoded .p12 is removed even if a later step fails. The keychain
-# stays: the build needs it, and the runner is discarded after the job.
 trap 'rm -f "$CERT_P12"' EXIT
 
 security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"

@@ -1,11 +1,8 @@
 import XCTest
 @testable import Coppice
 
-/// Pure parsing and classification. No filesystem, no git.
 final class ParsingTests: XCTestCase {
     private let home = URL(fileURLWithPath: "/Users/tester")
-
-    // MARK: git worktree list --porcelain
 
     func testParsesMainAndLinkedWorktrees() {
         let output = """
@@ -66,24 +63,21 @@ final class ParsingTests: XCTestCase {
         XCTAssertTrue(result[0].displayBranch.contains("detached"))
     }
 
-    // MARK: Harness attribution
-
     func testHarnessOwnershipByPath() {
         XCTAssertEqual(Harness.owning(path: "/Users/tester/.t3/worktrees/app/x", home: home), .t3Code)
         XCTAssertEqual(Harness.owning(path: "/Users/tester/.codex/worktrees/x", home: home), .codex)
         XCTAssertEqual(Harness.owning(path: "/Users/tester/Code/app/.claude/worktrees/x", home: home), .claudeCode)
+        XCTAssertEqual(Harness.owning(path: "/Users/tester/.commandcode/worktrees/app-3456ec99bfe5", home: home), .commandCode)
+        XCTAssertEqual(Harness.owning(path: "/Users/tester/.local/share/opencode/worktree/abc123/feature", home: home), .openCode)
         XCTAssertEqual(Harness.owning(path: "/Users/tester/Code/app/plain", home: home), .manual)
     }
 
-    /// The slug scheme is Claude Code's, verified against a real session directory.
     func testSessionSlugReplacesSlashesDotsAndUnderscores() {
         XCTAssertEqual(
             SessionHistory.slug(for: "/Users/prometheus/.t3/worktrees/ENV_Connect/t3code-0dd49d63"),
             "-Users-prometheus--t3-worktrees-ENV-Connect-t3code-0dd49d63"
         )
     }
-
-    // MARK: lsof
 
     func testParsesLsofFieldOutput() {
         let output = """
@@ -116,10 +110,6 @@ final class ParsingTests: XCTestCase {
         XCTAssertNotNil(ProcessProbe.holder(of: "/w/app", among: holders))
     }
 
-    /// `.manual` has no directory to find, so detection can never report it.
-    /// Onboarding therefore has to add it explicitly — without that, saving the
-    /// detected set hides every hand-made worktree and every ordinary
-    /// repository's own working copy, while the totals still count them.
     func testManualHarnessIsNeverDetected() throws {
         let home = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(
@@ -133,17 +123,10 @@ final class ParsingTests: XCTestCase {
         XCTAssertFalse(detected.contains(.manual), "manual has no detect directory")
         XCTAssertNil(Harness.manual.detectDirectory(home: home))
 
-        // What onboarding saves must still cover manual worktrees.
         let saved = Set(detected).union([.manual])
         XCTAssertTrue(saved.contains(.manual))
     }
 
-    // MARK: Launch-time settings
-
-    /// `showsDockIcon` is read two ways: through `@AppStorage` in the UI and
-    /// through a static in the app delegate, which runs before any instance
-    /// exists. A typo in either key string would silently pin the setting to
-    /// false forever, and nothing would fail. This is that check.
     func testDockIconSettingSharesOneKeyBetweenStaticAndStorage() {
         let key = "showsDockIcon"
         let original = UserDefaults.standard.object(forKey: key)
@@ -165,11 +148,6 @@ final class ParsingTests: XCTestCase {
         XCTAssertFalse(AppSettings.showsDockIcon, "absent means hidden from the Dock")
     }
 
-    // MARK: Override severity
-
-    /// Worktrees are scratch space. Refusing forever would make the app useless
-    /// on exactly the ones the user most wants gone, so everything that is
-    /// merely *the user's own work* has to be overridable.
     func testOnlyCorruptingBlockersAreAbsolute() {
         let absolute: [Blocker] = [
             .mainWorktree,
@@ -178,8 +156,7 @@ final class ParsingTests: XCTestCase {
         ]
         for blocker in absolute {
             XCTAssertEqual(blocker.severity, .absolute, "\(blocker) must never be overridable")
-            XCTAssertNil(blocker.lossIfForced, "an absolute blocker has no override to describe")
-            XCTAssertFalse(Verdict.blocked(blocker).canForceRemove)
+            XCTAssertFalse(Verdict.blocked(blocker).canRemove)
         }
 
         let overridable: [Blocker] = [
@@ -194,13 +171,10 @@ final class ParsingTests: XCTestCase {
         ]
         for blocker in overridable {
             XCTAssertEqual(blocker.severity, .overridable, "\(blocker) should be the user's call")
-            XCTAssertNotNil(blocker.lossIfForced, "an override must state what it destroys")
-            XCTAssertTrue(Verdict.blocked(blocker).canForceRemove)
-            XCTAssertFalse(Verdict.blocked(blocker).canRemove, "still blocked without an explicit override")
+            XCTAssertEqual(Verdict.blocked(blocker).status, .hasWork)
+            XCTAssertTrue(Verdict.blocked(blocker).canRemove, "has work, so it goes to the Trash")
         }
     }
-
-    // MARK: Pull requests
 
     func testParsesPullRequestsByBranch() {
         let json = """
@@ -220,8 +194,6 @@ final class ParsingTests: XCTestCase {
         XCTAssertFalse(byBranch["feat/redesign"]?.isSettled == true)
     }
 
-    /// A branch reused across several PRs should report the open one, not
-    /// whichever the API listed first.
     func testOpenPullRequestWinsOverOlderClosedOne() {
         let json = """
         [
@@ -241,9 +213,6 @@ final class ParsingTests: XCTestCase {
         XCTAssertTrue(GitHub.parse(Data("[]".utf8)).isEmpty)
     }
 
-    // MARK: Config classification
-
-    /// The rule that protects secrets must not fire on committed templates.
     func testConfigClassification() {
         XCTAssertTrue(WorktreeScanner.looksLikeConfig(".env"))
         XCTAssertTrue(WorktreeScanner.looksLikeConfig(".env.local"))
@@ -255,8 +224,6 @@ final class ParsingTests: XCTestCase {
         XCTAssertFalse(WorktreeScanner.looksLikeConfig("README.md"))
     }
 
-    // MARK: Version ordering
-
     func testVersionComparison() {
         XCTAssertTrue(Updater.isNewer("0.42", than: "0.41"))
         XCTAssertFalse(Updater.isNewer("0.41", than: "0.42"))
@@ -265,12 +232,10 @@ final class ParsingTests: XCTestCase {
         XCTAssertFalse(Updater.isNewer("0.42-nightly", than: "0.42"), "the channel suffix is not a version bump")
     }
 
-    // MARK: Verdict semantics
-
     func testSweepIsOnlyBlockedByALiveProcess() {
         let dirty = Verdict.blocked(.uncommittedChanges(count: 3))
         XCTAssertTrue(dirty.canSweep, "node_modules is not source, so a dirty worktree still sweeps")
-        XCTAssertFalse(dirty.canRemove, "but it is never removable")
+        XCTAssertTrue(dirty.canRemove, "and it can go to the Trash")
 
         let busy = Verdict.blocked(.liveProcess(command: "node", pid: 1))
         XCTAssertFalse(busy.canSweep, "a running process is the one thing that stops a sweep")
@@ -287,9 +252,7 @@ final class ParsingTests: XCTestCase {
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: base) }
 
-        // No package.json next to it, so `build` is not treated as output.
         XCTAssertFalse(ArtifactScanner.qualifies(name: "build", parent: base.path))
-        // .next needs no gate, it is never source.
         XCTAssertTrue(ArtifactScanner.qualifies(name: ".next", parent: base.path))
 
         FileManager.default.createFile(atPath: base.appending(path: "package.json").path, contents: Data("{}".utf8))
@@ -297,5 +260,19 @@ final class ParsingTests: XCTestCase {
         XCTAssertTrue(ArtifactScanner.qualifies(name: "node_modules", parent: base.path))
         XCTAssertFalse(ArtifactScanner.qualifies(name: "target", parent: base.path),
                        "target needs a Cargo.toml, not a package.json")
+    }
+
+    func testMergedPullRequestOnlyCountsWhenItsHeadIsTheBranchTip() {
+        let worktree = Worktree(
+            path: "/tmp/wt", repoPath: "/tmp/repo", branch: "feature", head: "abc123",
+            harness: .manual, isMain: false, isPrunable: false, isLocked: false, isOrphan: false
+        )
+        func report(headOid: String?) -> WorktreeReport {
+            let pullRequest = PullRequest(number: 1, state: .merged, title: "", url: "", isDraft: false, headOid: headOid)
+            return WorktreeReport(worktree: worktree, verdict: .safe, pullRequest: pullRequest)
+        }
+        XCTAssertTrue(report(headOid: "abc123").mergedAtHead)
+        XCTAssertFalse(report(headOid: "def456").mergedAtHead, "commits after the merge must not count as merged")
+        XCTAssertFalse(report(headOid: nil).mergedAtHead)
     }
 }

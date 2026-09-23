@@ -1,11 +1,5 @@
 import Foundation
 
-/// The pull request a worktree's branch belongs to, when there is one.
-///
-/// This is the strongest available signal about whether a worktree still
-/// matters. A branch whose PR is merged or closed is finished work, and
-/// uncommitted scratch edits left in it are almost always debris rather than
-/// something to protect.
 struct PullRequest: Sendable, Hashable {
     enum State: String, Sendable {
         case open = "OPEN"
@@ -18,8 +12,8 @@ struct PullRequest: Sendable, Hashable {
     let title: String
     let url: String
     let isDraft: Bool
+    var headOid: String?
 
-    /// Whether the PR being in this state means the branch is done with.
     var isSettled: Bool { state == .merged || state == .closed }
 
     var summary: String {
@@ -39,15 +33,7 @@ struct PullRequest: Sendable, Hashable {
     }
 }
 
-/// Reads pull request state through the GitHub CLI.
-///
-/// `gh` rather than the REST API on purpose: it already holds the user's
-/// credentials, handles enterprise hosts and SSH remotes, and needs no token
-/// management inside Coppice. If it is missing or signed out, every lookup
-/// returns nothing and the app carries on without the extra context.
 enum GitHub {
-    /// Candidate install locations. `gh` is not on the PATH a GUI app inherits,
-    /// which is why this is a list of absolute paths rather than a bare name.
     private static let executables = [
         "/opt/homebrew/bin/gh",
         "/usr/local/bin/gh",
@@ -60,15 +46,6 @@ enum GitHub {
 
     static var isInstalled: Bool { executable != nil }
 
-    /// Every pull request in a repository, keyed by branch name.
-    ///
-    /// One call per repository rather than one per worktree. A machine with 53
-    /// worktrees across 23 repositories makes 23 network calls this way instead
-    /// of 53, and the result covers worktrees whose branches share a PR.
-    ///
-    /// Returns an empty map on any failure: no `gh`, not signed in, no remote,
-    /// not a GitHub repository, or a network problem. Missing PR context is a
-    /// missing hint, never an error the user has to deal with.
     static func pullRequests(repo: String, limit: Int = 200) -> [String: PullRequest] {
         guard let executable else { return [:] }
 
@@ -78,12 +55,18 @@ enum GitHub {
                 "pr", "list",
                 "--state", "all",
                 "--limit", String(limit),
-                "--json", "number,state,title,url,isDraft,headRefName",
+                "--json", "number,state,title,url,isDraft,headRefName,headRefOid",
             ],
             cwd: repo,
             timeout: 25
         )
-        guard result.succeeded, let data = result.stdout.data(using: .utf8) else { return [:] }
+        guard result.succeeded, let data = result.stdout.data(using: .utf8) else {
+            let reason = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !reason.localizedCaseInsensitiveContains("remote") {
+                Log.shared.error("gh pr list failed in \(repo): \(reason)")
+            }
+            return [:]
+        }
         return parse(data)
     }
 
@@ -98,11 +81,9 @@ enum GitHub {
                 state: state,
                 title: row.title,
                 url: row.url,
-                isDraft: row.isDraft
+                isDraft: row.isDraft,
+                headOid: row.headRefOid
             )
-            // A branch can carry several PRs over its life. Prefer the open one,
-            // then the highest number, so the entry reflects its current state
-            // rather than whichever the API happened to list first.
             if let existing = byBranch[row.headRefName] {
                 let replaces = (pullRequest.state == .open && existing.state != .open)
                     || (pullRequest.state == .open) == (existing.state == .open)
@@ -121,5 +102,6 @@ enum GitHub {
         let url: String
         let isDraft: Bool
         let headRefName: String
+        let headRefOid: String?
     }
 }

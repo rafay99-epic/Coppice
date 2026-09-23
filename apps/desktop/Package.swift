@@ -1,9 +1,6 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// Coppice is dependency-free on purpose. Everything it needs (FSEvents, git,
-// lsof, AppKit, SwiftUI) ships with macOS, so a build is `swift build` and
-// nothing else — no package resolution, no supply chain, no lockfile drift.
 let package = Package(
     name: "Coppice",
     platforms: [.macOS(.v15)],

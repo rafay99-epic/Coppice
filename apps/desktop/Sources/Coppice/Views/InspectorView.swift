@@ -1,391 +1,367 @@
 import SwiftUI
 
-/// Detail for the selected worktree, and the only place Remove exists.
-///
-/// Built from `Form` and `LabeledContent` so it inherits the inspector metrics
-/// the system already uses in Xcode and Finder's Get Info, rather than
-/// hand-rolled rows that drift from them.
 struct InspectorView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
-    @State private var confirmingRemoval = false
-    @State private var deleteBranch = false
-    /// Set when the user opens the sheet from the override button rather than
-    /// the normal Remove, so the sheet knows to show what will be discarded.
-    @State private var forcing = false
+    @State private var removing: WorktreeReport?
 
     var body: some View {
         Group {
             if let report = model.selectedReport {
                 content(report)
             } else {
-                ContentUnavailableView(
-                    "No Selection",
-                    systemImage: "sidebar.trailing",
-                    description: Text("Select a worktree to see why Coppice reached its verdict.")
-                )
+                VStack(spacing: Space.s) {
+                    Text("Nothing selected")
+                        .font(.heading(17))
+                    Text("Pick a worktree to see what is inside.")
+                        .font(.uiCallout)
+                        .foregroundStyle(.secondary)
+                }
+                .multilineTextAlignment(.center)
+                .padding(Space.xl)
             }
         }
-        .sheet(isPresented: $confirmingRemoval) {
-            if let report = model.selectedReport {
-                RemoveSheet(report: report, deleteBranch: $deleteBranch, forcing: forcing) {
-                    Task { await model.remove(report, deleteBranch: deleteBranch, force: forcing) }
-                }
+        .font(.ui)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.black)
+        .sheet(item: $removing) { report in
+            RemoveSheet(report: report) { deleteBranch in
+                Task { await model.remove(report, deleteBranch: deleteBranch) }
             }
         }
     }
 
     private func content(_ report: WorktreeReport) -> some View {
-        Form {
-            Section {
-                LabeledContent("Status") { VerdictBadge(verdict: report.verdict) }
-                statusExplanation(report)
-            } header: {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.xxl) {
                 header(report)
-            }
-
-            Section("Size") {
-                if report.measured {
-                    LabeledContent("Build artifacts") {
-                        Text(Format.bytes(report.artifactBytes)).foregroundStyle(.green).monospacedDigit()
-                    }
-                    .help("Regenerable. A sweep frees this and an install command puts it back.")
-
-                    LabeledContent("Everything else") {
-                        Text(Format.bytes(report.uniqueBytes)).monospacedDigit()
-                    }
-                    .help("Only recoverable from the Trash.")
-                } else {
-                    LabeledContent("Measuring") { ProgressView().controlSize(.small) }
-                }
-            }
-
-            pullRequestSection(report)
-
-            Section("Details") {
-                LabeledContent("Repository", value: report.worktree.repoName)
-                LabeledContent("Branch", value: report.worktree.displayBranch)
-                LabeledContent("Created by", value: report.worktree.harness.displayName)
-                if !report.worktree.head.isEmpty {
-                    LabeledContent("HEAD", value: String(report.worktree.head.prefix(10)))
-                }
-                LabeledContent("Location") {
-                    Text(report.worktree.path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        .lineLimit(3)
-                        .truncationMode(.middle)
-                }
-                Button("Show in Finder") {
-                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: report.worktree.path)
-                }
-                .disabled(report.verdict == .prunable)
-            }
-
-            if !report.artifacts.isEmpty {
-                Section("Build Artifacts") {
-                    ForEach(report.artifacts.sorted { $0.bytes > $1.bytes }) { artifact in
-                        LabeledContent(artifact.kind) {
-                            Text(Format.compactBytes(artifact.bytes)).monospacedDigit().foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-
-            Section {
+                sizes(report)
+                pullRequestSection(report)
+                details(report)
+                artifacts(report)
                 actions(report)
             }
+            .padding(.horizontal, Space.xl)
+            .padding(.vertical, Space.xl)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .formStyle(.grouped)
-    }
-
-    /// Pull request state for this branch, or a spinner while it is fetched.
-    /// Extracted so `content` stays readable rather than one long builder.
-    @ViewBuilder
-    private func pullRequestSection(_ report: WorktreeReport) -> some View {
-        if let pullRequest = report.pullRequest {
-            Section("Pull Request") {
-                LabeledContent {
-                    Label(pullRequest.summary, systemImage: pullRequest.symbol)
-                        .foregroundStyle(pullRequest.isSettled ? .secondary : .primary)
-                } label: {
-                    Text("Status")
-                }
-                Text(pullRequest.title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if pullRequest.isSettled {
-                    Label(
-                        "This branch is finished, so anything uncommitted here is probably scratch work.",
-                        systemImage: "lightbulb"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-                Link("Open on GitHub", destination: URL(string: pullRequest.url) ?? URL(fileURLWithPath: "/"))
-                    .font(.caption)
-            }
-        } else if model.isCheckingPullRequests {
-            Section("Pull Request") {
-                LabeledContent("Status") {
-                    ProgressView().controlSize(.small)
-                }
-            }
-        }
+        .animation(.smooth, value: report.verdict)
+        .animation(.smooth, value: report.measured)
     }
 
     private func header(_ report: WorktreeReport) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(report.worktree.name)
-                .font(.headline)
-                .textSelection(.enabled)
-            Text(report.worktree.displayBranch)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
+        VStack(alignment: .leading, spacing: Space.m) {
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(report.worktree.name)
+                    .font(.heading(20))
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                Text(report.worktree.displayBranch)
+                    .font(.uiCallout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+            }
+            VerdictBadge(verdict: report.verdict)
+            statusExplanation(report)
         }
-        .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    private func sizes(_ report: WorktreeReport) -> some View {
+        section("Size") {
+            if report.measured {
+                row("Build output", value: Format.bytes(report.artifactBytes))
+                    .help("A sweep frees this. An install brings it back.")
+                row("Everything else", value: Format.bytes(report.uniqueBytes))
+                    .help("Only recoverable from the Trash.")
+            } else {
+                row("Measuring", value: "…")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func pullRequestSection(_ report: WorktreeReport) -> some View {
+        if let pullRequest = report.pullRequest {
+            section("Pull request") {
+                Label(pullRequest.summary, systemImage: pullRequest.symbol)
+                    .foregroundStyle(pullRequest.isSettled ? .secondary : .primary)
+                Text(pullRequest.title)
+                    .font(.uiCallout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if pullRequest.isSettled {
+                    Text("This branch is finished, so leftover edits are likely scratch work.")
+                        .font(.uiCaption)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let url = URL(string: pullRequest.url) {
+                    Link("Open on GitHub", destination: url)
+                        .font(.uiCallout)
+                        .foregroundStyle(.primary)
+                }
+            }
+        } else if model.isCheckingPullRequests {
+            section("Pull request") {
+                Text("Checking…")
+                    .font(.uiCallout)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func details(_ report: WorktreeReport) -> some View {
+        section("Details") {
+            row("Repository", value: report.worktree.repoName)
+            row("Created by", value: report.worktree.harness.displayName)
+            if !report.worktree.head.isEmpty {
+                row("HEAD", value: String(report.worktree.head.prefix(10)))
+            }
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("Location")
+                    .foregroundStyle(.secondary)
+                Text((report.worktree.path as NSString).abbreviatingWithTildeInPath)
+                    .font(.uiCaption)
+                    .foregroundStyle(.tertiary)
+                    .textSelection(.enabled)
+                    .lineLimit(3)
+                    .truncationMode(.middle)
+            }
+            Button("Show in Finder") {
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: report.worktree.path)
+            }
+            .buttonStyle(.plain)
+            .fixedSize()
+            .font(.uiCallout)
+            .underline()
+            .disabled(report.verdict == .prunable)
+        }
+    }
+
+    @ViewBuilder
+    private func artifacts(_ report: WorktreeReport) -> some View {
+        if !report.artifacts.isEmpty {
+            section("Build output") {
+                ForEach(report.artifacts.sorted { $0.bytes > $1.bytes }) { artifact in
+                    row(artifact.kind, value: Format.compactBytes(artifact.bytes))
+                }
+            }
+        }
+    }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: Space.m) {
+            SectionLabel(title)
+            VStack(alignment: .leading, spacing: Space.s) {
+                content()
+            }
+        }
+    }
+
+    private func row(_ label: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.m) {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: Space.s)
+            Text(value)
+                .monospacedDigit()
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .numeric(value)
+        }
     }
 
     @ViewBuilder
     private func statusExplanation(_ report: WorktreeReport) -> some View {
-        switch report.verdict {
-        case .blocked(let blocker):
-            VStack(alignment: .leading, spacing: 6) {
-                Text(blocker.summary).font(.callout)
-                Text(blocker.remedy).font(.caption).foregroundStyle(.secondary)
-                if case .ignoredConfig(let files) = blocker {
-                    ForEach(files, id: \.self) { file in
-                        Label(file, systemImage: "doc.text.fill")
-                            .font(.caption)
-                            .foregroundStyle(.red)
+        Group {
+            switch report.verdict {
+            case .blocked(let blocker) where blocker.severity == .absolute:
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text(blocker.summary)
+                    Text(blocker.remedy).font(.uiCaption).foregroundStyle(.tertiary)
+                }
+
+            case .blocked(let blocker):
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text(blocker.summary)
+                    Text("Moving it to the Trash keeps commits on the branch.")
+                        .font(.uiCaption)
+                        .foregroundStyle(.tertiary)
+                }
+
+            case .caution(let list):
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    ForEach(list, id: \.self) { caution in
+                        Text(caution.summary)
                     }
                 }
+
+            case .safe:
+                Text("Clean, pushed, and nothing is running here.")
+
+            case .prunable:
+                Text("The folder is already gone. Pruning clears the leftover git metadata.")
+
+            case .orphan:
+                Text("Its repository no longer exists.")
             }
-            .fixedSize(horizontal: false, vertical: true)
-
-        case .caution(let list):
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(list, id: \.self) { caution in
-                    Label(caution.summary, systemImage: "info.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-        case .safe:
-            Text("Clean, pushed, nothing running here, and no local-only config.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-        case .prunable:
-            Text("The directory is already gone. Pruning clears the leftover git metadata and touches nothing on disk.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-        case .orphan:
-            Text("The parent repository no longer exists, so nothing can reclaim this.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
+        .font(.uiCallout)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
     private func actions(_ report: WorktreeReport) -> some View {
-        if report.verdict.canSweep, report.artifactBytes > 0 {
-            Button {
-                Task { await model.sweep([report]) }
-            } label: {
-                Label("Sweep \(Format.compactBytes(report.artifactBytes))", systemImage: "scissors")
-            }
-            .disabled(model.isWorking)
-        }
-
-        if report.verdict == .prunable {
-            Button {
-                Task { await model.prune() }
-            } label: {
-                Label("Prune Metadata", systemImage: "clock.arrow.circlepath")
-            }
-            .disabled(model.isWorking)
-        } else {
-            Button(role: .destructive) {
-                forcing = false
-                confirmingRemoval = true
-            } label: {
-                Label("Remove Worktree…", systemImage: "trash")
-            }
-            .disabled(!report.verdict.canRemove || model.isWorking)
-
-            if let blocker = report.verdict.blocker {
-                overrideSection(report, blocker)
-            }
-        }
-    }
-
-    /// The escape hatch.
-    ///
-    /// Worktrees are scratch space, so refusing forever would make Coppice
-    /// useless on exactly the ones the user most wants gone. Overridable
-    /// blockers get a second, deliberately plainer button that states what is
-    /// destroyed; absolute ones say why no button exists.
-    @ViewBuilder
-    private func overrideSection(_ report: WorktreeReport, _ blocker: Blocker) -> some View {
-        if blocker.severity == .absolute {
-            Label(blocker.remedy, systemImage: "hand.raised.fill")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        } else {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(blocker.remedy)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if report.isLikelyDisposable {
-                    Label("Its pull request is closed, so this is likely safe to discard.", systemImage: "checkmark.circle")
-                        .font(.caption)
-                        .foregroundStyle(.green)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Button(role: .destructive) {
-                    forcing = true
-                    confirmingRemoval = true
+        VStack(alignment: .leading, spacing: Space.m) {
+            if report.verdict.canSweep, report.artifactBytes > 0 {
+                Button {
+                    Task { await model.sweep([report]) }
                 } label: {
-                    Label("Remove Anyway…", systemImage: "exclamationmark.triangle")
+                    Label("Sweep \(Format.compactBytes(report.artifactBytes))", systemImage: "scissors")
                 }
+                .buttonStyle(.mono)
                 .disabled(model.isWorking)
+            }
 
-                if let loss = blocker.lossIfForced {
-                    Text("Discards work: \(loss).")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            if report.verdict == .prunable {
+                Button {
+                    Task { await model.prune(only: report.worktree.repoPath) }
+                } label: {
+                    Label("Prune metadata", systemImage: "clock.arrow.circlepath")
                 }
+                .buttonStyle(.mono)
+                .disabled(model.isWorking)
+            } else if report.verdict.canRemove {
+                Button {
+                    removing = report
+                } label: {
+                    Label("Move to Trash…", systemImage: "trash")
+                }
+                .buttonStyle(.quiet)
+                .disabled(model.isWorking)
             }
         }
     }
 }
 
-/// Typed confirmation for the one irreversible action.
-///
-/// The name has to be entered by hand. That is what makes bulk removal
-/// impossible and forces the user to read what they actually picked.
 struct RemoveSheet: View {
     let report: WorktreeReport
-    @Binding var deleteBranch: Bool
-    /// Overriding a blocker. The sheet changes tone and lists what is destroyed.
-    var forcing = false
-    let onConfirm: () -> Void
+    let onConfirm: (Bool) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
-    @State private var typed = ""
+    @State private var deleteBranch = false
+    @State private var blockers: [Blocker]?
 
-    private var matches: Bool { typed == report.worktree.name }
+    private var notes: [String] { (blockers ?? []).compactMap(\.removalNote) }
+    private var ignoredFiles: [String] {
+        (blockers ?? []).flatMap { blocker -> [String] in
+            if case .ignoredConfig(let files) = blocker { return files }
+            return []
+        }
+    }
+    private var holdsCommits: Bool { (blockers ?? []).contains(where: \.holdsCommits) }
+    private var sizeText: String {
+        report.measured ? "\(Format.bytes(report.totalBytes)). " : ""
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: forcing ? "exclamationmark.triangle.fill" : "trash.circle.fill")
-                    .font(.system(size: 38))
-                    .foregroundStyle(forcing ? AnyShapeStyle(.orange) : AnyShapeStyle(.red))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(forcing
-                         ? "Discard work and remove “\(report.worktree.name)”?"
-                         : "Remove “\(report.worktree.name)”?")
-                        .font(.headline)
-                    Text(forcing
-                         ? "Coppice would normally refuse this. Removing it destroys work that exists nowhere else."
-                         : "The directory goes to the Trash, then git metadata is pruned. Anything gitignored inside has no copy in git.")
-                        .font(.subheadline)
+        VStack(alignment: .leading, spacing: Space.xl) {
+            VStack(alignment: .leading, spacing: Space.s) {
+                Text("Move \(report.worktree.name) to the Trash?")
+                    .font(.heading(20))
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                Text("\(sizeText)You can restore it from the Trash.")
+                    .font(.uiCallout)
+                    .foregroundStyle(.secondary)
+            }
+
+            goesWithIt
+
+            VStack(alignment: .leading, spacing: Space.s) {
+                if let pullRequest = report.pullRequest {
+                    HStack {
+                        Text("Pull request").foregroundStyle(.secondary)
+                        Spacer()
+                        Label(pullRequest.summary, systemImage: pullRequest.symbol)
+                    }
+                }
+                HStack {
+                    Text("Branch").foregroundStyle(.secondary)
+                    Spacer()
+                    Text(report.worktree.displayBranch)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Toggle("Delete branch too", isOn: $deleteBranch)
+                    .toggleStyle(.switch)
+                    .tint(.white)
+                    .disabled(report.worktree.branch == nil)
+                if deleteBranch, holdsCommits {
+                    Text("Its commits are only on this branch. Git keeps the branch unless it is merged.")
+                        .font(.uiCaption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(20)
 
-            Divider()
-
-            Form {
-                if forcing, let loss = report.verdict.blocker?.lossIfForced {
-                    Section {
-                        Label(loss, systemImage: "exclamationmark.octagon.fill")
-                            .foregroundStyle(.red)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if case .ignoredConfig(let files) = report.verdict.blocker {
-                            ForEach(files, id: \.self) { file in
-                                Text(file).font(.caption).monospaced().foregroundStyle(.secondary)
-                            }
-                        }
-                    } header: {
-                        Text("What you are discarding")
-                    }
-                }
-
-                if let pullRequest = report.pullRequest {
-                    LabeledContent("Pull request") {
-                        Label(pullRequest.summary, systemImage: pullRequest.symbol)
-                            .foregroundStyle(pullRequest.state == .open ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
-                    }
-                }
-
-                LabeledContent("Branch", value: report.worktree.displayBranch)
-                LabeledContent("Repository", value: report.worktree.repoName)
-                LabeledContent("Size", value: report.measured ? Format.bytes(report.totalBytes) : "Not measured")
-
-                Toggle("Also delete the branch", isOn: $deleteBranch)
-                    .disabled(report.worktree.branch == nil)
-                    .help("Uses git branch -d, so git still refuses if the branch is unmerged.")
-
-                if settings.rescueIgnoredConfig {
-                    Label(
-                        "Gitignored config is copied to \(settings.rescueDirectory.lastPathComponent) first.",
-                        systemImage: "shield.lefthalf.filled"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-
-                TextField("Type “\(report.worktree.name)” to confirm", text: $typed)
-                    .textFieldStyle(.roundedBorder)
-            }
-            // Scrolls, and is the only part of the sheet that does. The header
-            // states what is about to happen and the footer holds the buttons,
-            // so both must stay pinned: a confirmation whose Cancel button can
-            // be scrolled out of reach is worse than no confirmation at all.
-            //
-            // The middle grew past the window once the forced-removal section
-            // and pull request row were added, which is what made an earlier
-            // `.scrollDisabled(true)` here a real bug rather than a tidy-up.
-            .formStyle(.grouped)
-            .frame(maxHeight: 420)
-
-            Divider()
-
-            HStack {
+            HStack(spacing: Space.m) {
                 Spacer()
                 Button("Cancel") { dismiss() }
+                    .buttonStyle(.plain)
+                    .fixedSize()
+                    .foregroundStyle(.secondary)
                     .keyboardShortcut(.cancelAction)
-                Button(forcing ? "Discard and Remove" : "Remove") {
-                    onConfirm()
+                Button("Move to Trash") {
+                    onConfirm(deleteBranch)
                     dismiss()
                 }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-                .tint(forcing ? .orange : .red)
-                .disabled(!matches)
+                .buttonStyle(.mono)
+                .disabled(blockers == nil)
             }
-            .padding(20)
         }
+        .font(.ui)
+        .padding(Space.xxl)
         .frame(width: 440)
+        .background(.black)
+        .animation(.smooth, value: blockers)
+        .animation(.smooth, value: deleteBranch)
+        .task {
+            blockers = await model.allBlockers(for: report)
+        }
+    }
+
+    @ViewBuilder
+    private var goesWithIt: some View {
+        if blockers == nil {
+            Text("Checking what is inside…")
+                .font(.uiCallout)
+                .foregroundStyle(.tertiary)
+        } else if !notes.isEmpty || !ignoredFiles.isEmpty {
+            VStack(alignment: .leading, spacing: Space.m) {
+                SectionLabel("Goes with it")
+                VStack(alignment: .leading, spacing: Space.s) {
+                    ForEach(notes, id: \.self) { note in
+                        Text(note).fixedSize(horizontal: false, vertical: true)
+                    }
+                    ForEach(ignoredFiles, id: \.self) { file in
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(file).font(.uiCallout.monospaced())
+                            Spacer(minLength: Space.s)
+                            Text(settings.rescueIgnoredConfig ? "Copy saved to Coppice Rescue" : "Kept in the Trash")
+                                .font(.uiCaption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+            }
+        }
     }
 }

@@ -1,12 +1,18 @@
+import Darwin
 import Foundation
 import os
 
-/// Append-only record of everything Coppice deleted.
-///
-/// A cleaner without an audit trail is a cleaner you cannot trust after the
-/// fact. Every removal writes the path, the byte count, the verdict at the
-/// moment of deletion and the method used, so "what happened to that worktree"
-/// has an answer that does not depend on anyone's memory.
+private var crashDescriptor: Int32 = -1
+private let crashLines = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>.allocate(capacity: 32)
+
+private func recordCrash(_ signal: Int32) {
+    if crashDescriptor >= 0, signal > 0, signal < 32, let line = crashLines[Int(signal)] {
+        _ = Darwin.write(crashDescriptor, line, strlen(line))
+    }
+    Darwin.signal(signal, SIG_DFL)
+    raise(signal)
+}
+
 final class Log: @unchecked Sendable {
     static let shared = Log()
 
@@ -16,9 +22,6 @@ final class Log: @unchecked Sendable {
     private let maxBytes: Int64 = 2 * 1024 * 1024
 
     private init() {
-        // Per channel, not per app. Stable, Nightly and Dev install side by side
-        // and must not share state: a shared directory means Nightly's log
-        // overwrites Stable's, and uninstalling one wipes the other's history.
         let support = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appending(path: Channel.current.displayName)
@@ -30,22 +33,55 @@ final class Log: @unchecked Sendable {
 
     func write(_ message: String) {
         logger.info("\(message, privacy: .public)")
-        queue.async { [self] in
-            rotateIfNeeded()
-            let stamp = ISO8601DateFormatter().string(from: Date())
-            let line = "\(stamp)  \(message)\n"
-            guard let data = line.data(using: .utf8) else { return }
-            if let handle = try? FileHandle(forWritingTo: fileURL) {
-                defer { try? handle.close() }
-                _ = try? handle.seekToEnd()
-                try? handle.write(contentsOf: data)
-            } else {
-                try? data.write(to: fileURL)
-            }
+        append(message)
+    }
+
+    func error(_ message: String) {
+        logger.error("\(message, privacy: .public)")
+        append("ERROR  \(message)")
+    }
+
+    func critical(_ message: String) {
+        logger.fault("\(message, privacy: .public)")
+        queue.sync { appendNow("CRASH  \(message)") }
+    }
+
+    func installCrashHandlers() {
+        queue.sync { reopenCrashDescriptor() }
+        let signals: [(Int32, String)] = [
+            (SIGSEGV, "SIGSEGV"), (SIGBUS, "SIGBUS"), (SIGILL, "SIGILL"),
+            (SIGABRT, "SIGABRT"), (SIGFPE, "SIGFPE"), (SIGTRAP, "SIGTRAP"),
+        ]
+        let version = Updater.currentVersion
+        for (number, name) in signals {
+            let line = "CRASH  Coppice \(version) stopped on \(name). The full report is in Console, under Crash Reports.\n"
+            crashLines[Int(number)] = strdup(line)
+            signal(number, recordCrash)
         }
     }
 
-    /// Keeps one generation. The log is a record, not an archive.
+    private func append(_ message: String) {
+        queue.async { [self] in appendNow(message) }
+    }
+
+    private func appendNow(_ message: String) {
+        rotateIfNeeded()
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        let data = Data("\(stamp)  \(message)\n".utf8)
+        if let handle = try? FileHandle(forWritingTo: fileURL) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+        } else {
+            try? data.write(to: fileURL)
+        }
+    }
+
+    private func reopenCrashDescriptor() {
+        if crashDescriptor >= 0 { close(crashDescriptor) }
+        crashDescriptor = open(fileURL.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
+    }
+
     private func rotateIfNeeded() {
         guard let size = try? FileManager.default
             .attributesOfItem(atPath: fileURL.path)[.size] as? Int64,
@@ -53,10 +89,6 @@ final class Log: @unchecked Sendable {
         let previous = fileURL.deletingPathExtension().appendingPathExtension("1.log")
         try? FileManager.default.removeItem(at: previous)
         try? FileManager.default.moveItem(at: fileURL, to: previous)
-    }
-
-    func recentLines(limit: Int = 200) -> [String] {
-        guard let contents = try? String(contentsOf: fileURL, encoding: .utf8) else { return [] }
-        return Array(contents.split(separator: "\n").map(String.init).suffix(limit))
+        if crashDescriptor >= 0 { reopenCrashDescriptor() }
     }
 }

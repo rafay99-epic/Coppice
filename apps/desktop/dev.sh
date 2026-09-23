@@ -1,7 +1,4 @@
 #!/bin/zsh
-# Builds the CURRENT branch as the Dev channel and installs it next to Stable.
-# Stable (/Applications/Coppice.app) is never touched — break Dev all you like.
-# Usage: ./dev.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -12,6 +9,7 @@ DEST="/Applications/Coppice Dev.app"
 
 echo "Installing → $DEST"
 osascript -e 'tell application "Coppice Dev" to quit' 2>/dev/null || true
+pkill -f "$DEST/Contents/MacOS/Coppice" 2>/dev/null || true
 sleep 1
 rm -rf "$DEST"
 ditto "$APP" "$DEST"

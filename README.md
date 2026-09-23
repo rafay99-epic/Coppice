@@ -40,16 +40,17 @@ Coppice is meant to be ignored until it is useful. Nothing here needs a schedule
 
 **7. Results are reported, not swallowed.** Progress is per worktree with a running freed total. The outcome is a banner that distinguishes success from a partial run from an outright failure, listing every skipped and failed path with its reason. Everything also goes to `~/Library/Application Support/Coppice/activity.log`.
 
-### When a block is in your way
+### Three states
 
-Most worktrees are scratch space, so a block you can never clear would make Coppice useless on exactly the ones worth deleting. Of the eleven rules, **three are absolute** and eight are yours to override.
+Every worktree is **Ready**, **Has work** or **In use**.
 
-| | Rules | Why |
+| State | Meaning | Remove |
 | --- | --- | --- |
-| **Absolute** | live process, main worktree, outside your folders | Forcing past these corrupts something no confirmation can undo |
-| **Overridable** | the other eight | This is your own work, and discarding it is a decision you are allowed to make |
+| **Ready** | Clean and pushed | Move to Trash |
+| **Has work** | Uncommitted files, unpushed commits, local config, a lock or a rebase in progress | Move to Trash, and the dialog lists what goes with it |
+| **In use** | An agent, editor or dev server is running inside it | Refused |
 
-An overridable block shows **Remove Anyway**, which states exactly what will be destroyed ("5 commits not on the default branch will be lost"), shows whether the branch's PR is already merged, and still requires typing the worktree name. Even then it rescues your gitignored config first: choosing to discard your *work* is not the same as choosing to lose the API keys that happened to sit in the same folder.
+Removal moves the folder to the Trash, so uncommitted files come back from there. Commits live in the repository, so they stay on the branch unless you also delete it. Gitignored config like `.env.local` is copied to `~/Documents/Coppice Rescue` first. Your main checkout and paths outside your folders are never touched.
 
 ## What it does
 
@@ -59,9 +60,9 @@ Three operations, sorted by what they cost you.
 | --- | --- | --- |
 | **Sweep** | Deletes build output inside worktrees: `node_modules`, `.next`, `target`, `DerivedData`. Never touches source or git state. | Yes, by reinstalling |
 | **Prune** | Clears git metadata for worktrees whose directories are already gone. | Frees no space |
-| **Remove** | Deletes the worktree, prunes the metadata, optionally deletes the branch. | No |
+| **Remove** | Moves the worktree to the Trash, prunes the metadata, optionally deletes the branch. | From the Trash |
 
-Sweep is the default and reclaims most of the space. Remove is gated behind a typed confirmation, one worktree at a time. There is no Remove All anywhere in the product.
+Sweep is the default and reclaims most of the space. Remove works one worktree at a time. There is no Remove All anywhere in the product.
 
 ## Safety
 
@@ -81,7 +82,7 @@ Coppice refuses to remove a worktree for any of eleven reasons:
 
 **Rule 6 is the one that matters.** A `.env.local` is gitignored, so `git status` reports the worktree as perfectly clean while it holds live secrets. A cleaner that trusts git alone deletes it with no warning and no copy anywhere.
 
-Eight of these eleven are overridable, as described in [The workflow](#when-a-block-is-in-your-way). Only a live process, the main worktree and the folder boundary refuse absolutely.
+Eight of these eleven mark a worktree as Has work, as described in [Three states](#three-states). Only a live process, the main worktree and the folder boundary refuse removal.
 
 Every rule is recomputed **at the moment of deletion**, not when the list was built. Coppice scans in the background, so a verdict can be minutes old by the time you press a button, and in those minutes an agent may have opened the very worktree you picked.
 
@@ -122,11 +123,20 @@ swift test       # run the suite
 ./dev.sh         # build + run "Coppice Dev" locally — your sandbox, never published
 ./nightly.sh     # build + run "Coppice Nightly" locally
 ./make-dmg.sh    # package the installer
+osascript -l JavaScript Scripts/ui-check.js   # read-only UI check of the running Dev app
 ```
 
 Building requires full Xcode, not just Command Line Tools, because SwiftUI's macros ship with the full toolchain.
 
 The website dev server: `cd apps/website && bun run dev`.
+
+Website end-to-end tests run in headless Chrome on port 4390, so they never touch a dev server you already have open:
+
+```sh
+cd apps/website
+bun run test:e2e                                        # builds, serves and tests the static site
+E2E_BASE_URL=http://localhost:3000 bun run test:e2e     # same tests against a running dev server, which also catches hydration warnings
+```
 
 ## Release channels
 

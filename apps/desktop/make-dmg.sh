@@ -1,9 +1,4 @@
 #!/bin/zsh
-# Packages the built app into a drag-to-install disk image.
-#   COPPICE_CHANNEL=stable (default) → build/Coppice.dmg         (Coppice.app)
-#   COPPICE_CHANNEL=nightly          → build/Coppice-Nightly.dmg ("Coppice Nightly.app")
-# Dev is local-only and publishes no DMG (use ./dev.sh). Runs ./build.sh first
-# if the app is missing.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -56,9 +51,6 @@ if command -v SetFile >/dev/null 2>&1; then
   SetFile -a C "/Volumes/$VOLUME" || true
 fi
 
-# Window size, icon positions, background. If Finder automation is not permitted
-# (some CI runners), the DMG still works with the default layout.
-# Unquoted heredoc so $VOLUME / $APP_NAME interpolate (AppleScript has no $).
 if ! osascript <<EOF
 tell application "Finder"
 	tell disk "$VOLUME"
@@ -91,14 +83,8 @@ echo "Compressing…"
 hdiutil convert "$RW_DMG" -format UDZO -imagekey zlib-level=9 -ov -o "$OUT_DMG" >/dev/null
 rm -f "$RW_DMG" build/dmg-background.png
 rm -rf "$STAGE"
-# Ad-hoc sign the disk image wrapper only. This does NOT recurse into the .app
-# inside, which keeps whatever signature build.sh gave it. Re-signing here with
-# --deep would strip the stable identity and reset users' permission grants.
 codesign --force --sign - "$OUT_DMG"
 
-# Stamp the app icon onto the .dmg file itself so Finder shows it instead of the
-# generic disk-image icon. After codesign, because the icon is a resource-fork
-# xattr rather than part of the signed image data. Non-fatal.
 echo "Setting DMG file icon…"
 swift Scripts/SetFileIcon.swift "$OUT_DMG" "$APP/Contents/Resources/AppIcon.icns" \
   || echo "warning: could not set the DMG file icon — using Finder's default"

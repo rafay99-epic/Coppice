@@ -14,10 +14,7 @@ updates:
     commit-message:
       prefix: "chore(website)"
     groups:
-      # One PR for the React/Next stack rather than five that all conflict.
       react:
         patterns: ["react", "react-dom", "@types/react", "@types/react-dom", "next"]
       tailwind:
         patterns: ["tailwindcss", "@tailwindcss/*"]
-# The desktop app has no dependencies to update. That is the point of it having
-# none: `swift build` and nothing else.
