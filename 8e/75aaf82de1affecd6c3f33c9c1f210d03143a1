@@ -1,0 +1,38 @@
+apps/website/package.json
+  s_3e3dfec32bf217::t_0896aac777d6bb 18
+  s_3e3dfec32bf217::t_59c65f2f4e5a01 9-10
+apps/desktop/Scripts/ui-check.js
+  s_3e3dfec32bf217::t_783e9e8ac55cc4 28-32
+  s_3e3dfec32bf217::t_909874124fbb02 1-3,6-27,33-38
+  s_3e3dfec32bf217::t_4961ab52326dce 4-5
+apps/website/e2e/site.spec.ts
+  s_3e3dfec32bf217::t_913b3235519c98 1-56
+apps/website/playwright.config.ts
+  s_3e3dfec32bf217::t_dcbe689548b6fc 1-3,5-10,12-18,27
+  s_3e3dfec32bf217::t_a4558cb10f6d58 4,11,19-26
+apps/website/app/layout.tsx
+  s_3e3dfec32bf217::t_f813c442d6bcf0 58
+.gitignore
+  s_3e3dfec32bf217::t_59c65f2f4e5a01 22-23
+README.md
+  s_3e3dfec32bf217::t_969acb1eb8a9d8 126,133-139
+  s_3e3dfec32bf217::t_4c22772c601704 140
+bun.lock
+  s_3e3dfec32bf217::t_3376d6a4448bd3 21,118-119,258-261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8e75aaf82de1affecd6c3f33c9c1f210d03143a1",
+  "prompts": {},
+  "sessions": {
+    "s_3e3dfec32bf217": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fc78b36b-49ba-4f4d-b965-573ed26d3610",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
