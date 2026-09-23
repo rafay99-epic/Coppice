@@ -23,20 +23,22 @@ struct CoppiceApp: App {
     var body: some Scene {
         Window("Coppice", id: WindowID.main) {
             RootView()
+                .font(.ui)
                 .environmentObject(model)
                 .environmentObject(settings)
                 .environmentObject(updater)
-                .frame(minWidth: 820, minHeight: 520)
+                .frame(minWidth: 900, minHeight: 560)
                 .preferredColorScheme(.dark)
                 .tint(.white)
                 .task { updater.startAutomaticChecks(settings: settings) }
         }
-        .defaultSize(width: 1000, height: 640)
+        .defaultSize(width: 1180, height: 720)
         .defaultLaunchBehavior(presentsWindowAtLaunch ? .presented : .suppressed)
         .commands { CoppiceCommands(model: model, updater: updater) }
 
         MenuBarExtra {
             MenuBarView()
+                .font(.ui)
                 .preferredColorScheme(.dark)
                 .tint(.white)
                 .environmentObject(model)
@@ -49,6 +51,7 @@ struct CoppiceApp: App {
 
         Settings {
             SettingsView()
+                .font(.ui)
                 .preferredColorScheme(.dark)
                 .tint(.white)
                 .environmentObject(model)
@@ -106,7 +109,7 @@ struct CoppiceCommands: Commands {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     static let showWindow = Notification.Name("com.syntaxlabtechnology.coppice.showWindow")
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

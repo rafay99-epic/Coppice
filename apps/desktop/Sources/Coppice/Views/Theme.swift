@@ -30,15 +30,53 @@ extension Verdict {
     }
 }
 
+extension Font {
+    static func display(_ size: CGFloat, italic: Bool = false) -> Font {
+        .custom(italic ? "Fraunces-LightItalic" : "Fraunces-Light", size: size)
+    }
+
+    static func heading(_ size: CGFloat = 17, italic: Bool = false) -> Font {
+        .custom(italic ? "Fraunces-Italic" : "Fraunces-Regular", size: size)
+    }
+
+    static let ui = Font.custom("Instrument Sans", size: 13, relativeTo: .body)
+    static let uiLarge = Font.custom("Instrument Sans", size: 15, relativeTo: .title3)
+    static let uiCallout = Font.custom("Instrument Sans", size: 12.5, relativeTo: .callout)
+    static let uiCaption = Font.custom("Instrument Sans", size: 11.5, relativeTo: .caption)
+}
+
+enum Space {
+    static let xxs: CGFloat = 2
+    static let xs: CGFloat = 4
+    static let s: CGFloat = 8
+    static let m: CGFloat = 12
+    static let l: CGFloat = 16
+    static let xl: CGFloat = 24
+    static let xxl: CGFloat = 32
+    static let xxxl: CGFloat = 48
+}
+
+struct SectionLabel: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.heading(14, italic: true))
+            .foregroundStyle(.secondary)
+    }
+}
+
 struct MonoButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.body.weight(.medium))
+            .font(.ui.weight(.medium))
             .foregroundStyle(.black)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 5)
+            .padding(.horizontal, Space.l)
+            .padding(.vertical, 6)
             .background(.white, in: .capsule)
             .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.35)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
@@ -49,6 +87,27 @@ struct MonoButtonStyle: ButtonStyle {
 
 extension ButtonStyle where Self == MonoButtonStyle {
     static var mono: MonoButtonStyle { MonoButtonStyle() }
+}
+
+struct QuietButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.ui.weight(.medium))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, Space.l)
+            .padding(.vertical, 6)
+            .overlay(Capsule().strokeBorder(.white.opacity(0.35)))
+            .contentShape(.capsule)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.35)
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.snappy(duration: 0.18), value: configuration.isPressed)
+    }
+}
+
+extension ButtonStyle where Self == QuietButtonStyle {
+    static var quiet: QuietButtonStyle { QuietButtonStyle() }
 }
 
 extension View {
@@ -68,7 +127,7 @@ struct VerdictBadge: View {
             Image(systemName: verdict.symbol)
                 .contentTransition(.symbolEffect(.replace))
         }
-        .font(.caption)
+        .font(.uiCaption)
         .foregroundStyle(verdict.tint)
         .labelStyle(.titleAndIcon)
         .help(helpText)
@@ -88,7 +147,7 @@ struct VerdictBadge: View {
 
 enum Format {
     static func bytes(_ value: Int64) -> String {
-        guard value > 0 else { return "Zero KB" }
+        guard value > 0 else { return "0 MB" }
         return value.formatted(.byteCount(style: .file))
     }
 

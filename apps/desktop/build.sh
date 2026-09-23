@@ -90,6 +90,7 @@ if [ ! -f "$ICON_CACHE" ]; then
   iconutil -c icns "$ICONSET" -o "$ICON_CACHE"
 fi
 cp "$ICON_CACHE" "$APP/Contents/Resources/AppIcon.icns"
+ditto Resources/Fonts "$APP/Contents/Resources/Fonts"
 
 SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
 if [ "$SIGN_IDENTITY" != "-" ]; then

@@ -10,11 +10,6 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("\(step + 1) of \(stepCount)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-
             Group {
                 switch step {
                 case 0: found
@@ -31,86 +26,107 @@ struct OnboardingView: View {
 
             controls
         }
-        .padding(32)
-        .frame(minWidth: 600, minHeight: 440)
+        .font(.ui)
+        .padding(.horizontal, Space.xxxl)
+        .padding(.top, Space.xxxl)
+        .padding(.bottom, Space.xl)
+        .frame(minWidth: 680, minHeight: 500)
         .background(.black)
-        .animation(.smooth(duration: 0.3), value: step)
+        .tint(.white)
+        .animation(.smooth(duration: 0.35), value: step)
     }
 
     private var found: some View {
-        HStack(alignment: .top, spacing: 24) {
-            foundText
-            GrowingStump(lineWidth: 1.6)
-                .frame(height: 220)
-        }
-    }
+        HStack(alignment: .top, spacing: Space.xxl) {
+            VStack(alignment: .leading, spacing: Space.xl) {
+                if model.isScanning && model.visibleReports.isEmpty {
+                    title("Looking for", "worktrees…")
+                } else {
+                    title("Your agents left \(model.visibleReports.count) worktrees", "behind.")
+                }
 
-    private var foundText: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            title(
-                model.isScanning && model.visibleReports.isEmpty
-                    ? "Looking for worktrees…"
-                    : "Your agents left \(model.visibleReports.count) worktrees behind."
-            )
+                HStack(alignment: .firstTextBaseline, spacing: Space.xxl) {
+                    stat(size(model.totalBytes), "on disk")
+                    stat(size(model.reclaimableBytes), "safe to free")
+                }
 
-            HStack(spacing: 32) {
-                stat(size(model.totalBytes), "on disk")
-                stat(size(model.reclaimableBytes), "safe to free")
+                Text("\(agentNames) gets its own copy of your repo. Nothing deletes them.")
+                    .font(.uiLarge)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: 360, alignment: .leading)
 
-            Text("\(agentNames) gets its own copy of your repo. Nothing deletes them.")
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+
+            GrowingStump(lineWidth: 1.4)
+                .frame(height: 250)
         }
-        .padding(.top, 10)
     }
 
     private var twoWays: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            title("Two ways to get space back.")
-            way(
-                "Sweep",
-                symbol: "scissors",
-                detail: "Deletes node_modules and build output. Your code stays. One install brings it back."
-            )
-            Divider()
-            way(
-                "Move to Trash",
-                symbol: "trash",
-                detail: "Removes a whole worktree. Commits stay on the branch, and the folder waits in the Trash."
-            )
+        VStack(alignment: .leading, spacing: Space.xxl) {
+            title("Two ways to", "get space back.")
+            VStack(alignment: .leading, spacing: Space.xl) {
+                way(
+                    "Sweep",
+                    symbol: "scissors",
+                    detail: "Deletes node_modules and build output. Your code stays, and one install brings it back."
+                )
+                way(
+                    "Move to Trash",
+                    symbol: "trash",
+                    detail: "Removes a whole worktree. Commits stay on the branch, and the folder waits in the Trash."
+                )
+            }
+            .frame(maxWidth: 460, alignment: .leading)
         }
-        .padding(.top, 10)
     }
 
     private var menuBar: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            title("It lives in your menu bar.")
-            Text("Coppice only acts when you click. It never touches a worktree an agent is using right now, or your main checkout.")
+        VStack(alignment: .leading, spacing: Space.xl) {
+            title("It lives in", "your menu bar.")
+            Text("Coppice only acts when you click. It never touches a worktree an agent is using, or your main checkout.")
+                .font(.uiLarge)
                 .foregroundStyle(.secondary)
+                .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
-            LabeledContent("Watching", value: watching)
-            Text("Change folders and agents any time in Settings.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .frame(maxWidth: 460, alignment: .leading)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                SectionLabel("Watching")
+                Text(watching)
+                    .font(.ui)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, Space.s)
+            Text("Change folders and agents in Settings.")
+                .font(.uiCaption)
+                .foregroundStyle(.tertiary)
         }
-        .padding(.top, 10)
     }
 
     private var controls: some View {
-        HStack {
-            HStack(spacing: 6) {
+        HStack(spacing: Space.l) {
+            HStack(spacing: Space.s) {
                 ForEach(0..<stepCount, id: \.self) { index in
-                    Circle()
+                    Capsule()
                         .fill(index == step ? AnyShapeStyle(.primary) : AnyShapeStyle(.quaternary))
-                        .frame(width: 6, height: 6)
+                        .frame(width: index == step ? 18 : 6, height: 6)
                 }
             }
+            .animation(.snappy, value: step)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Step \(step + 1) of \(stepCount)")
+
             Spacer()
+
             if step > 0 {
                 Button("Back") { step -= 1 }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
             }
-            Button(step == stepCount - 1 ? "Start" : "Continue") {
+            Button(step == stepCount - 1 ? "Start using Coppice" : "Continue") {
                 if step == stepCount - 1 { finish() } else { step += 1 }
             }
             .buttonStyle(.mono)
@@ -118,34 +134,38 @@ struct OnboardingView: View {
         }
     }
 
-    private func title(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 28, weight: .semibold))
+    private func title(_ plain: String, _ emphasis: String) -> some View {
+        (Text(plain + " ") + Text(emphasis).font(.display(40, italic: true)))
+            .font(.display(40))
+            .lineSpacing(2)
             .fixedSize(horizontal: false, vertical: true)
-            .numeric(text)
+            .numeric(plain)
     }
 
-    private func stat(_ value: String, _ label: String, tint: Color = .primary) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    private func stat(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
             Text(value)
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(tint)
+                .font(.display(32))
                 .monospacedDigit()
                 .numeric(value)
-            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(label)
+                .font(.uiCaption)
+                .foregroundStyle(.secondary)
         }
     }
 
     private func way(_ name: String, symbol: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .firstTextBaseline, spacing: Space.l) {
             Image(systemName: symbol)
-                .font(.title2)
-                .frame(width: 28)
+                .font(.uiLarge)
+                .foregroundStyle(.secondary)
+                .frame(width: 22)
                 .symbolEffect(.bounce, options: .nonRepeating, value: step)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(name).font(.headline)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(name).font(.heading(20))
                 Text(detail)
                     .foregroundStyle(.secondary)
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

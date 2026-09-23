@@ -47,6 +47,7 @@ struct MainView: View {
     @State private var search = ""
     @State private var confirmingSweep = false
     @AppStorage("dismissedDiskAccess") private var dismissedDiskAccess = false
+    @FocusState private var listFocused: Bool
 
     var body: some View {
         NavigationSplitView {
@@ -55,7 +56,8 @@ struct MainView: View {
             detail
         }
         .navigationTitle("Coppice")
-        .navigationSubtitle(subtitle)
+        .toolbar(removing: .title)
+        .font(.ui)
         .toolbarBackground(.black, for: .windowToolbar)
         .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
     }
@@ -69,19 +71,23 @@ struct MainView: View {
                 sidebarRow(.stale, count: model.visibleReports.filter { Scope.stale.contains($0) }.count)
             }
 
-            Section("Created By") {
+            Section {
                 ForEach(model.presentHarnesses, id: \.self) { harness in
                     sidebarRow(
                         .harness(harness),
                         count: model.visibleReports.filter { $0.worktree.harness == harness }.count
                     )
                 }
+            } header: {
+                SectionLabel("Created by")
+                    .padding(.top, Space.l)
+                    .padding(.leading, Space.s)
             }
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
         .background(.black)
-        .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 280)
+        .navigationSplitViewColumnWidth(min: 220, ideal: 236, max: 300)
     }
 
     private func sidebarRow(_ row: Scope, count: Int) -> some View {
@@ -89,26 +95,31 @@ struct MainView: View {
         return Button {
             scope = row
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: Space.m) {
                 Image(systemName: row.symbol)
                     .frame(width: 18)
-                    .foregroundStyle(selected ? .primary : .secondary)
+                    .foregroundStyle(selected ? .primary : .tertiary)
                 Text(row.title)
-                Spacer(minLength: 6)
+                    .foregroundStyle(selected ? .primary : .secondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                Spacer(minLength: Space.xs)
                 Text("\(count)")
+                    .font(.uiCaption)
                     .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tertiary)
                     .numeric(count)
+                    .fixedSize()
             }
-            .fontWeight(selected ? .semibold : .regular)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .font(.ui.weight(selected ? .medium : .regular))
+            .padding(.horizontal, Space.s)
+            .padding(.vertical, 7)
             .contentShape(.rect)
             .background(.white.opacity(selected ? 0.12 : 0), in: .rect(cornerRadius: 6))
             .animation(.snappy(duration: 0.2), value: selected)
         }
         .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets(top: 1, leading: 4, bottom: 1, trailing: 4))
+        .listRowInsets(EdgeInsets(top: 1, leading: Space.s, bottom: 1, trailing: Space.s))
     }
 
     private var detail: some View {
@@ -122,15 +133,18 @@ struct MainView: View {
                 BannerView(banner: banner) {
                     withAnimation { model.banner = nil }
                 }
-                Divider()
+                .padding(.horizontal, Space.xl)
+                .padding(.top, Space.m)
             }
 
             if model.activity.isMutating {
                 ActivityBar(activity: model.activity)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, Space.xl)
+                    .padding(.vertical, Space.m)
                 Divider()
             }
+
+            header
 
             if filteredGroups.isEmpty {
                 emptyState
@@ -146,7 +160,7 @@ struct MainView: View {
         .toolbar { toolbar }
         .inspector(isPresented: $showInspector) {
             InspectorView()
-                .inspectorColumnWidth(min: 270, ideal: 310, max: 400)
+                .inspectorColumnWidth(min: 290, ideal: 330, max: 420)
         }
         .confirmationDialog(
             "Sweep build artifacts in \(model.sweepCandidates.count) worktrees?",
@@ -167,10 +181,10 @@ struct MainView: View {
     }
 
     private var diskAccessBanner: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Space.m) {
             Image(systemName: "lock.shield").foregroundStyle(.secondary)
             Text("Coppice can't read \(unreadableList). Allow Full Disk Access to include it.")
-                .font(.callout)
+                .font(.uiCallout)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             Button("Open Privacy Settings") {
@@ -184,44 +198,70 @@ struct MainView: View {
             } label: {
                 Image(systemName: "xmark")
             }
+            .accessibilityLabel("Dismiss")
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
             .help("Dismiss")
         }
-        .padding(12)
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.m)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Text(scope.title)
+                .font(.display(30))
+                .contentTransition(.opacity)
+                .animation(.smooth, value: scope)
+            Text(subtitle)
+                .font(.uiCallout)
+                .foregroundStyle(.secondary)
+                .numeric(subtitle)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Space.xl)
+        .padding(.top, Space.l)
+        .padding(.bottom, Space.s)
     }
 
     private var worktreeList: some View {
         ScrollViewReader { proxy in
             List {
                 ForEach(filteredGroups, id: \.path) { group in
-                    HStack {
+                    HStack(alignment: .firstTextBaseline) {
                         Text(group.repo)
+                            .font(.heading(15, italic: true))
+                            .foregroundStyle(.secondary)
                         Spacer()
                         Text(
                             group.reports.contains(where: \.measured)
                                 ? Format.compactBytes(group.reports.reduce(0) { $0 + $1.totalBytes })
-                                : "—"
+                                : "…"
                         )
+                        .font(.uiCaption)
                         .foregroundStyle(.tertiary)
                         .monospacedDigit()
                         .contentTransition(.numericText())
                     }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 14)
+                    .padding(.top, Space.xl)
+                    .padding(.bottom, Space.xs)
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 0, leading: Space.xl, bottom: 0, trailing: Space.xl))
                     ForEach(group.reports) { report in
                         let selected = model.selection == report.id
                         WorktreeRow(report: report)
                             .id(report.id)
                             .contentShape(.rect)
-                            .onTapGesture { model.selection = report.id }
+                            .onTapGesture { select(report.id) }
+                            .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+                            .accessibilityAction { select(report.id) }
+                            .listRowInsets(EdgeInsets(top: 0, leading: Space.xl, bottom: 0, trailing: Space.xl))
+                            .listRowSeparatorTint(.white.opacity(0.06))
                             .listRowBackground(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(.white.opacity(selected ? 0.12 : 0))
-                                    .padding(.horizontal, 8)
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(.white.opacity(selected ? 0.1 : 0))
+                                    .padding(.horizontal, Space.s)
                                     .animation(.snappy(duration: 0.2), value: selected)
                             )
                     }
@@ -231,6 +271,7 @@ struct MainView: View {
             .scrollContentBackground(.hidden)
             .background(.black)
             .focusable()
+            .focused($listFocused)
             .focusEffectDisabled()
             .onKeyPress(.upArrow) { moveSelection(by: -1) }
             .onKeyPress(.downArrow) { moveSelection(by: 1) }
@@ -239,7 +280,15 @@ struct MainView: View {
                 guard let id else { return }
                 withAnimation(.smooth) { proxy.scrollTo(id) }
             }
+            .onChange(of: filteredGroups.flatMap { $0.reports.map(\.id) }) { _, ids in
+                if let selection = model.selection, !ids.contains(selection) { model.selection = nil }
+            }
         }
+    }
+
+    private func select(_ id: String) {
+        model.selection = id
+        listFocused = true
     }
 
     private func moveSelection(by offset: Int) -> KeyPress.Result {
@@ -255,25 +304,36 @@ struct MainView: View {
         !model.isScanning && search.isEmpty && model.visibleReports.isEmpty
     }
 
+    private var emptyTitle: String {
+        if model.isScanning { return "Looking around." }
+        if !search.isEmpty { return "No matches." }
+        return foundNothing ? "Nothing to cut back." : "All clear here."
+    }
+
+    private var emptyDetail: String {
+        if model.isScanning { return "Reading git metadata across your folders." }
+        if !search.isEmpty { return "Nothing matches that filter." }
+        return foundNothing ? "Coppice checks your code folders and agent directories." : "No worktrees in \(scope.title)."
+    }
+
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label(
-                model.isScanning ? "Scanning" : foundNothing ? "No Worktrees" : "Nothing in \(scope.title)",
-                systemImage: model.isScanning ? "arrow.triangle.2.circlepath" : "square.stack.3d.up.slash"
-            )
-        } description: {
-            if model.isScanning {
-                Text("Reading git metadata across your scan folders.")
-            } else if !search.isEmpty {
-                Text("Nothing matches that filter.")
-            } else if foundNothing {
-                Text("Coppice looks in your code folders and in the agent worktree directories.")
-            }
-        } actions: {
+        VStack(spacing: Space.l) {
+            GrowingStump(lineWidth: 1.2)
+                .frame(height: 110)
+                .foregroundStyle(.secondary)
+            Text(emptyTitle)
+                .font(.display(26, italic: true))
+            Text(emptyDetail)
+                .font(.uiCallout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
             if foundNothing {
-                SettingsLink { Text("Open Settings…") }
+                SettingsLink { Text("Open Settings") }
+                    .buttonStyle(.mono)
+                    .padding(.top, Space.s)
             }
         }
+        .padding(Space.xxl)
     }
 
     @ToolbarContentBuilder
@@ -288,12 +348,10 @@ struct MainView: View {
 
         ToolbarItem(placement: .status) {
             if model.isScanning || model.isMeasuring {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text(model.isScanning ? "Scanning" : "Sizing")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text(model.isScanning ? "Scanning" : "Sizing")
+                    .font(.uiCaption)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
             }
         }
 
@@ -307,6 +365,7 @@ struct MainView: View {
                 )
             }
             .buttonStyle(.mono)
+            .labelStyle(.titleAndIcon)
             .contentTransition(.numericText())
             .animation(.smooth, value: model.reclaimableBytes)
             .disabled(model.sweepCandidates.isEmpty || model.isWorking)
@@ -357,38 +416,39 @@ struct WorktreeRow: View {
     let report: WorktreeReport
 
     var body: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(spacing: Space.l) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(report.worktree.name)
+                    .font(.ui.weight(.medium))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(report.worktree.displayBranch)
-                    .font(.caption)
+                    .font(.uiCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: Space.s)
 
             if report.artifactBytes > 0 {
                 Text(Format.compactBytes(report.artifactBytes))
-                    .font(.caption)
+                    .font(.uiCaption)
                     .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tertiary)
                     .numeric(report.artifactBytes)
                     .help("Build output a sweep frees")
             }
 
-            Text(report.measured ? Format.compactBytes(report.totalBytes) : "—")
+            Text(report.measured ? Format.compactBytes(report.totalBytes) : "…")
                 .monospacedDigit()
                 .numeric(report.totalBytes)
                 .foregroundStyle(report.measured ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
-                .frame(width: 66, alignment: .trailing)
+                .frame(width: 72, alignment: .trailing)
 
             VerdictBadge(verdict: report.verdict)
-                .frame(width: 100, alignment: .leading)
+                .frame(width: 96, alignment: .leading)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Space.m)
     }
 }
