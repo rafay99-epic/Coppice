@@ -48,6 +48,7 @@ struct MainView: View {
     @State private var confirmingSweep = false
     @AppStorage("dismissedDiskAccess") private var dismissedDiskAccess = false
     @FocusState private var listFocused: Bool
+    @State private var dismissedFailures: Set<String> = []
 
     var body: some View {
         NavigationSplitView {
@@ -58,8 +59,6 @@ struct MainView: View {
         .navigationTitle("Coppice")
         .toolbar(removing: .title)
         .font(.ui)
-        .toolbarBackground(.black, for: .windowToolbar)
-        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
     }
 
     private var sidebar: some View {
@@ -87,7 +86,7 @@ struct MainView: View {
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
         .background(.black)
-        .navigationSplitViewColumnWidth(min: 220, ideal: 236, max: 300)
+        .navigationSplitViewColumnWidth(min: 240, ideal: 250, max: 320)
     }
 
     private func sidebarRow(_ row: Scope, count: Int) -> some View {
@@ -127,6 +126,14 @@ struct MainView: View {
             if !model.unreadableRoots.isEmpty, !dismissedDiskAccess {
                 diskAccessBanner
                 Divider()
+            }
+
+            if let failures = visibleFailures {
+                BannerView(banner: failures) {
+                    withAnimation { dismissedFailures.formUnion(model.scanFailures.map(\.id)) }
+                }
+                .padding(.horizontal, Space.xl)
+                .padding(.top, Space.m)
             }
 
             if let banner = model.banner {
@@ -174,6 +181,18 @@ struct MainView: View {
         } message: {
             Text("Source, git history and local config are untouched. An install command rebuilds everything this removes.")
         }
+    }
+
+    private var visibleFailures: Banner? {
+        let fresh = model.scanFailures.filter { !dismissedFailures.contains($0.id) }
+        guard !fresh.isEmpty else { return nil }
+        let count = fresh.count
+        return Banner(
+            kind: .warning,
+            title: "Couldn't read \(count) repositor\(count == 1 ? "y" : "ies")",
+            message: "They were skipped in this scan. The log has the git error.",
+            details: fresh
+        )
     }
 
     private var unreadableList: String {

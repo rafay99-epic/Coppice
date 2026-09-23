@@ -17,7 +17,7 @@ struct OnboardingView: View {
                 default: menuBar
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .id(step)
             .transition(.asymmetric(
                 insertion: .move(edge: .trailing).combined(with: .opacity),
@@ -176,7 +176,7 @@ struct OnboardingView: View {
     }
 
     private var agentNames: String {
-        let names = model.detectedHarnesses.map(\.displayName)
+        let names = model.presentHarnesses.filter { $0 != .manual }.map(\.displayName)
         return names.isEmpty ? "Every agent task" : "Every task in \(names.formatted(.list(type: .and)))"
     }
 

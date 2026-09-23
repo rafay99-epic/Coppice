@@ -67,6 +67,8 @@ final class ParsingTests: XCTestCase {
         XCTAssertEqual(Harness.owning(path: "/Users/tester/.t3/worktrees/app/x", home: home), .t3Code)
         XCTAssertEqual(Harness.owning(path: "/Users/tester/.codex/worktrees/x", home: home), .codex)
         XCTAssertEqual(Harness.owning(path: "/Users/tester/Code/app/.claude/worktrees/x", home: home), .claudeCode)
+        XCTAssertEqual(Harness.owning(path: "/Users/tester/.commandcode/worktrees/app-3456ec99bfe5", home: home), .commandCode)
+        XCTAssertEqual(Harness.owning(path: "/Users/tester/.local/share/opencode/worktree/abc123/feature", home: home), .openCode)
         XCTAssertEqual(Harness.owning(path: "/Users/tester/Code/app/plain", home: home), .manual)
     }
 

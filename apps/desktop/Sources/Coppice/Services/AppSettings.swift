@@ -4,7 +4,7 @@ import SwiftUI
 @MainActor
 final class AppSettings: ObservableObject {
     @AppStorage("codeRoots") private var codeRootsRaw: String?
-    @AppStorage("enabledHarnesses") private var enabledHarnessesRaw: String?
+    @AppStorage("disabledHarnesses") private var disabledHarnessesRaw: String = ""
     @AppStorage("notifyThresholdGB") var notifyThresholdGB: Double = 5.0
     @AppStorage("showSizeInMenuBar") var showSizeInMenuBar: Bool = true
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
@@ -31,15 +31,13 @@ final class AppSettings: ObservableObject {
 
     var enabledHarnesses: Set<Harness> {
         get {
-            guard let enabledHarnessesRaw else { return Set(Harness.allCases) }
-            return Set(
-                enabledHarnessesRaw
-                    .split(separator: ",", omittingEmptySubsequences: true)
-                    .compactMap { Harness(rawValue: String($0)) }
-            )
+            let disabled = disabledHarnessesRaw
+                .split(separator: ",", omittingEmptySubsequences: true)
+                .compactMap { Harness(rawValue: String($0)) }
+            return Set(Harness.allCases).subtracting(disabled)
         }
         set {
-            enabledHarnessesRaw = newValue.map(\.rawValue).joined(separator: ",")
+            disabledHarnessesRaw = Set(Harness.allCases).subtracting(newValue).map(\.rawValue).sorted().joined(separator: ",")
             objectWillChange.send()
         }
     }

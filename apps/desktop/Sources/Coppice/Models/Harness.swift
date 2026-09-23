@@ -6,6 +6,8 @@ enum Harness: String, CaseIterable, Codable, Sendable {
     case t3Code
     case cursor
     case gemini
+    case commandCode
+    case openCode
     case manual
 
     var displayName: String {
@@ -15,6 +17,8 @@ enum Harness: String, CaseIterable, Codable, Sendable {
         case .t3Code: return "T3 Code"
         case .cursor: return "Cursor"
         case .gemini: return "Gemini"
+        case .commandCode: return "Command Code"
+        case .openCode: return "OpenCode"
         case .manual: return "Manual"
         }
     }
@@ -26,6 +30,8 @@ enum Harness: String, CaseIterable, Codable, Sendable {
         case .t3Code: return "bolt.fill"
         case .cursor: return "cursorarrow.rays"
         case .gemini: return "diamond.fill"
+        case .commandCode: return "command"
+        case .openCode: return "curlybraces"
         case .manual: return "hand.raised.fill"
         }
     }
@@ -37,6 +43,8 @@ enum Harness: String, CaseIterable, Codable, Sendable {
         case .t3Code: return home.appending(path: ".t3")
         case .cursor: return home.appending(path: ".cursor")
         case .gemini: return home.appending(path: ".gemini")
+        case .commandCode: return home.appending(path: ".commandcode")
+        case .openCode: return home.appending(path: ".local/share/opencode")
         case .manual: return nil
         }
     }
@@ -47,6 +55,8 @@ enum Harness: String, CaseIterable, Codable, Sendable {
         case .codex: return [home.appending(path: ".codex/worktrees")]
         case .claudeCode: return [home.appending(path: ".claude/worktrees")]
         case .cursor: return [home.appending(path: ".cursor/worktrees")]
+        case .commandCode: return [home.appending(path: ".commandcode/worktrees")]
+        case .openCode: return [home.appending(path: ".local/share/opencode/worktree")]
         case .gemini, .manual: return []
         }
     }
@@ -56,7 +66,7 @@ enum Harness: String, CaseIterable, Codable, Sendable {
         case .claudeCode: return ".claude/worktrees"
         case .codex: return ".codex/worktrees"
         case .cursor: return ".cursor/worktrees"
-        case .t3Code, .gemini, .manual: return nil
+        case .t3Code, .gemini, .commandCode, .openCode, .manual: return nil
         }
     }
 

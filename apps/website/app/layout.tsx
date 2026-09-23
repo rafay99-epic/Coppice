@@ -31,6 +31,9 @@ export const metadata: Metadata = {
     "node_modules",
     "Claude Code",
     "Codex",
+    "T3 Code",
+    "Command Code",
+    "OpenCode",
     "disk cleanup",
   ],
   openGraph: {
