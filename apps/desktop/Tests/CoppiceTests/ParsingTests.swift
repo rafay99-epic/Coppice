@@ -288,3 +288,18 @@ final class ParsingTests: XCTestCase {
         XCTAssertEqual(Git.parseDirtySubmodules(""), [])
     }
 }
+
+final class DiagnosticsTests: XCTestCase {
+    func testProblemsKeepsOnlyErrorsAndCrashesNewestFirst() {
+        let log = """
+        2026-09-24T10:00:00Z  Coppice 0.90 (nightly) launched
+        2026-09-24T10:01:00Z  ERROR  git failed  in ~/Code/app
+        2026-09-24T10:02:00Z  Swept 3 worktrees
+        2026-09-24T10:03:00Z  CRASH  Coppice 0.90 stopped on SIGSEGV.
+        """
+        let problems = Diagnostics.problems(in: log)
+        XCTAssertEqual(problems.map(\.kind), ["CRASH", "ERROR"])
+        XCTAssertEqual(problems.last?.message, "git failed  in ~/Code/app")
+        XCTAssertNotNil(problems.first?.date)
+    }
+}
