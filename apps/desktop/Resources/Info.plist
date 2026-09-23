@@ -22,7 +22,6 @@
 	<string>15.0</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.developer-tools</string>
-	<!-- Menu bar only. No Dock icon, no app switcher entry. -->
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHighResolutionCapable</key>
@@ -33,6 +32,8 @@
 	<false/>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Syntax Lab Technology. Licensed under the MIT License.</string>
+	<key>ATSApplicationFontsPath</key>
+	<string>Fonts</string>
 	<key>CoppiceChannel</key>
 	<string>stable</string>
 </dict>

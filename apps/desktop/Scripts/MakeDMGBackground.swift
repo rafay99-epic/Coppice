@@ -1,8 +1,4 @@
 #!/usr/bin/env swift
-// Renders the drag-to-install background for the DMG window.
-//   swift Scripts/MakeDMGBackground.swift <out.png>
-//
-// Sized 660×428 at 2×, matching the window bounds make-dmg.sh sets in Finder.
 
 import AppKit
 
@@ -18,11 +14,9 @@ image.lockFocus()
 
 guard let context = NSGraphicsContext.current?.cgContext else { exit(1) }
 
-// True black, matching the app itself.
 context.setFillColor(NSColor.black.cgColor)
 context.fill(CGRect(x: 0, y: 0, width: width, height: height))
 
-// A faint vertical lift so the window has some depth under the icons.
 let gradient = CGGradient(
     colorsSpace: CGColorSpaceCreateDeviceRGB(),
     colors: [
@@ -55,8 +49,6 @@ draw(
     y: height - 186
 )
 
-// The arrow between the app and the Applications alias. Finder places those two
-// at x = 165 and x = 495 in a 660pt window, so this sits in the gap at 2×.
 let arrowY = height - 415.0
 let start = 610.0, end = 710.0
 context.setStrokeColor(NSColor(white: 0.30, alpha: 1).cgColor)

@@ -1,9 +1,4 @@
 #!/bin/zsh
-# Builds the CURRENT branch as the Nightly channel and installs it next to
-# Stable (and Dev). Stable (/Applications/Coppice.app) is never touched. Use this
-# to smoke-test a Nightly build locally before pushing to the `nightly` branch.
-# A local build has build number 0, so it will offer to pull the published one.
-# Usage: ./nightly.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 

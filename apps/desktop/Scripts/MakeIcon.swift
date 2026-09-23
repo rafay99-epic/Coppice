@@ -1,10 +1,4 @@
 #!/usr/bin/env swift
-// Renders the app icon as a 1024×1024 PNG.
-//   swift Scripts/MakeIcon.swift <out.png> [stable|nightly|dev]
-//
-// The mark is a coppiced stump: one horizontal cut, three shoots of different
-// heights growing back out of it. It reads at 16pt because it is three bars and
-// a line, and it says what the app does without a metaphor anyone has to decode.
 
 import AppKit
 import CoreGraphics
@@ -17,14 +11,9 @@ guard arguments.count >= 2 else {
 let outputPath = arguments[1]
 let channel = arguments.count >= 3 ? arguments[2] : "stable"
 
-/// Each channel gets its own accent so three installed copies are distinguishable
-/// in the Dock, in Finder, and on the DMG.
-let accent: NSColor
-switch channel {
-case "nightly": accent = NSColor(srgbRed: 0.69, green: 0.49, blue: 1.00, alpha: 1)
-case "dev":     accent = NSColor(srgbRed: 1.00, green: 0.75, blue: 0.26, alpha: 1)
-default:        accent = NSColor(srgbRed: 0.24, green: 0.86, blue: 0.52, alpha: 1)
-}
+let inverted = channel == "nightly"
+let paper = inverted ? NSColor.white : NSColor.black
+let ink = inverted ? NSColor.black : NSColor.white
 
 let size = 1024.0
 let image = NSImage(size: NSSize(width: size, height: size))
@@ -35,8 +24,6 @@ guard let context = NSGraphicsContext.current?.cgContext else {
     exit(1)
 }
 
-// macOS icon geometry: the artwork sits inside a squircle with a margin, so it
-// lines up with every other app in the Dock rather than looking oversized.
 let inset = size * 0.094
 let plate = CGRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2)
 let squircle = CGPath(
@@ -46,95 +33,96 @@ let squircle = CGPath(
     transform: nil
 )
 
-// Near-black plate with a slight vertical lift, so the icon has depth without
-// looking like a gradient-heavy 2015 icon.
 context.saveGState()
 context.addPath(squircle)
-context.clip()
-let backdrop = CGGradient(
-    colorsSpace: CGColorSpaceCreateDeviceRGB(),
-    colors: [
-        NSColor(srgbRed: 0.10, green: 0.11, blue: 0.11, alpha: 1).cgColor,
-        NSColor(srgbRed: 0.02, green: 0.02, blue: 0.02, alpha: 1).cgColor,
-    ] as CFArray,
-    locations: [0, 1]
-)!
-context.drawLinearGradient(
-    backdrop,
-    start: CGPoint(x: plate.midX, y: plate.maxY),
-    end: CGPoint(x: plate.midX, y: plate.minY),
-    options: []
-)
+context.setFillColor(paper.cgColor)
+context.fillPath()
 context.restoreGState()
 
-// Hairline rim, the way Apple's own utility icons separate from a dark Dock.
 context.saveGState()
 context.addPath(squircle)
-context.setStrokeColor(NSColor(white: 1, alpha: 0.10).cgColor)
+context.setStrokeColor(ink.withAlphaComponent(0.14).cgColor)
 context.setLineWidth(size * 0.006)
 context.strokePath()
 context.restoreGState()
 
-/// Fills a rounded bar. Every element of the mark is one of these, which is what
-/// keeps it legible when the whole icon is 16 points wide.
-func bar(_ rect: CGRect, color: NSColor) {
+let art = CGRect(x: 170, y: 40, width: 260, height: 440)
+let scale = plate.height * 0.66 / art.height
+let origin = CGPoint(
+    x: plate.midX - art.midX * scale,
+    y: plate.midY + art.midY * scale
+)
+var flip = CGAffineTransform(translationX: origin.x, y: origin.y).scaledBy(x: scale, y: -scale)
+
+func stroke(_ build: (CGMutablePath) -> Void, width: Double, alpha: Double = 1) {
+    let path = CGMutablePath()
+    build(path)
     context.saveGState()
-    context.setFillColor(color.cgColor)
-    let radius = min(rect.width, rect.height) / 2
-    context.addPath(CGPath(
-        roundedRect: rect,
-        cornerWidth: radius,
-        cornerHeight: radius,
-        transform: nil
-    ))
-    context.fillPath()
+    context.addPath(path.copy(using: &flip)!)
+    context.setStrokeColor(ink.withAlphaComponent(alpha).cgColor)
+    context.setLineWidth(width)
+    context.setLineCap(.round)
+    context.setLineJoin(.round)
+    context.strokePath()
     context.restoreGState()
 }
 
-// Optical centre sits slightly above the geometric one, because the shoots carry
-// more visual weight than the stool below them.
-let markWidth = plate.width * 0.54
-let markX = plate.midX - markWidth / 2
-let cutHeight = size * 0.040
-let cutY = plate.midY - plate.height * 0.055
+let line = size * 0.024
 
-// The stool: what is left standing after the cut. Dim accent rather than grey,
-// so it reads as the same plant rather than a stray shape.
-let stoolWidth = markWidth * 0.30
-bar(
-    CGRect(
-        x: plate.midX - stoolWidth / 2,
-        y: cutY - plate.height * 0.185,
-        width: stoolWidth,
-        height: plate.height * 0.19 + cutHeight
-    ),
-    color: accent.withAlphaComponent(0.26)
-)
+stroke({ path in
+    path.move(to: CGPoint(x: 226, y: 474))
+    path.addCurve(to: CGPoint(x: 232, y: 376), control1: CGPoint(x: 232, y: 440), control2: CGPoint(x: 228, y: 404))
+    path.move(to: CGPoint(x: 374, y: 474))
+    path.addCurve(to: CGPoint(x: 368, y: 376), control1: CGPoint(x: 368, y: 440), control2: CGPoint(x: 372, y: 404))
+    path.move(to: CGPoint(x: 232, y: 376))
+    path.addCurve(to: CGPoint(x: 368, y: 376), control1: CGPoint(x: 250, y: 356), control2: CGPoint(x: 350, y: 356))
+    path.addCurve(to: CGPoint(x: 232, y: 376), control1: CGPoint(x: 350, y: 396), control2: CGPoint(x: 250, y: 396))
+    path.move(to: CGPoint(x: 206, y: 474))
+    path.addLine(to: CGPoint(x: 394, y: 474))
+}, width: line)
 
-// Shoots first, so the cut bar overlaps them and they read as growing out from
-// behind it rather than crossing it.
-let shootWidth = size * 0.055
-let gap = (markWidth - shootWidth * 3) / 2
-let heights = [0.19, 0.30, 0.24].map { plate.height * $0 }
-let opacities = [0.55, 1.0, 0.76]
+stroke({ path in
+    path.move(to: CGPoint(x: 272, y: 372))
+    path.addCurve(to: CGPoint(x: 204, y: 150), control1: CGPoint(x: 262, y: 300), control2: CGPoint(x: 222, y: 230))
+    path.move(to: CGPoint(x: 300, y: 368))
+    path.addCurve(to: CGPoint(x: 302, y: 110), control1: CGPoint(x: 302, y: 290), control2: CGPoint(x: 298, y: 190))
+    path.move(to: CGPoint(x: 328, y: 372))
+    path.addCurve(to: CGPoint(x: 396, y: 150), control1: CGPoint(x: 338, y: 300), control2: CGPoint(x: 378, y: 230))
+}, width: line)
 
-for index in 0..<3 {
-    bar(
-        CGRect(
-            x: markX + Double(index) * (shootWidth + gap),
-            y: cutY,
-            width: shootWidth,
-            height: heights[index] + cutHeight
-        ),
-        color: accent.withAlphaComponent(opacities[index])
-    )
+func leaf(_ tip: CGPoint, toward angle: Double, length: Double = 96, width: Double = 30) -> (CGMutablePath) -> Void {
+    { path in
+        let dx = cos(angle), dy = sin(angle)
+        let end = CGPoint(x: tip.x + dx * length, y: tip.y + dy * length)
+        let nx = -dy * width, ny = dx * width
+        let mid = CGPoint(x: (tip.x + end.x) / 2, y: (tip.y + end.y) / 2)
+        path.move(to: tip)
+        path.addQuadCurve(to: end, control: CGPoint(x: mid.x + nx, y: mid.y + ny))
+        path.addQuadCurve(to: tip, control: CGPoint(x: mid.x - nx, y: mid.y - ny))
+    }
 }
 
-// The cut itself, drawn last so it sits cleanly across the base of the shoots.
-bar(
-    CGRect(x: markX, y: cutY, width: markWidth, height: cutHeight),
-    color: accent
-)
+stroke(leaf(CGPoint(x: 204, y: 150), toward: -.pi * 0.66), width: line)
+stroke(leaf(CGPoint(x: 302, y: 110), toward: -.pi * 0.5), width: line)
+stroke(leaf(CGPoint(x: 396, y: 150), toward: -.pi * 0.34), width: line)
+
+if channel == "dev" {
+    let band = CGRect(x: plate.minX, y: plate.minY, width: plate.width, height: plate.height * 0.16)
+    context.saveGState()
+    context.addPath(squircle)
+    context.clip()
+    context.setFillColor(ink.cgColor)
+    context.fill(band)
+    context.restoreGState()
+
+    let label = NSAttributedString(string: "DEV", attributes: [
+        .font: NSFont.systemFont(ofSize: band.height * 0.52, weight: .heavy),
+        .foregroundColor: paper,
+        .kern: band.height * 0.06,
+    ])
+    let bounds = label.size()
+    label.draw(at: CGPoint(x: band.midX - bounds.width / 2, y: band.midY - bounds.height / 2))
+}
 
 image.unlockFocus()
 

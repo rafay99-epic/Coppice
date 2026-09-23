@@ -9,12 +9,7 @@ excluded:
 disabled_rules:
   - trailing_whitespace
   - todo
-  # Trailing commas on multi-line literals are what Xcode itself produces, and
-  # they keep diffs to one line when an element is appended.
   - trailing_comma
-  # `String(decoding:as:)` is deliberate: it never fails and substitutes the
-  # replacement character, where `String(bytes:encoding:)` returns nil and would
-  # silently drop a subprocess's entire output on one bad byte.
   - optional_data_string_conversion
 
 opt_in_rules:
@@ -54,8 +49,6 @@ identifier_name:
 nesting:
   type_level: 3
 
-# Named three-element tuples read better than a struct for a purely local
-# grouping such as (artifacts, artifactBytes, uniqueBytes).
 large_tuple:
   warning: 3
   error: 4

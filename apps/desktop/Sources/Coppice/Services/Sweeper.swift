@@ -1,15 +1,6 @@
 import Foundation
 
-/// Performs the two destructive operations, and refuses them whenever the world
-/// has moved since the verdict was computed.
-///
-/// The re-verification is the point of this type. Coppice scans in the
-/// background, so a verdict can be minutes old by the time a button is pressed,
-/// and in those minutes an agent may have opened the very worktree that was
-/// about to be deleted.
 enum Sweeper {
-    /// One thing that did not happen, and why. A struct rather than a tuple so
-    /// the UI can list these, and so a reason never gets lost on the way out.
     struct Item: Sendable, Hashable, Identifiable {
         let path: String
         let reason: String
@@ -27,9 +18,6 @@ enum Sweeper {
         var hasProblems: Bool { !skipped.isEmpty || !failures.isEmpty }
     }
 
-    /// Where a long operation has got to. Reported per item so the UI can show a
-    /// determinate bar and name what is being worked on, rather than an
-    /// indeterminate spinner that tells the user nothing.
     struct Progress: Sendable, Equatable {
         var completed: Int
         var total: Int
@@ -39,13 +27,6 @@ enum Sweeper {
         var fraction: Double { total > 0 ? Double(completed) / Double(total) : 0 }
     }
 
-    // MARK: - Sweep
-
-    /// Deletes regenerable build artifacts inside the given worktrees.
-    ///
-    /// Uses `removeItem`, not the Trash, on purpose. A 1.3 GB `node_modules` is
-    /// 100k+ files; moving that to the Trash takes minutes and leaves the Trash
-    /// unusable, and the undo is `bun install`, not a restore.
     static func sweep(
         reports: [WorktreeReport],
         scanner: WorktreeScanner,
@@ -57,6 +38,10 @@ enum Sweeper {
         let holders = ProcessProbe.currentHolders()
         let total = reports.count
         var completed = 0
+        let knownSizes = Dictionary(
+            reports.flatMap(\.artifacts).map { ($0.path, $0.bytes) },
+            uniquingKeysWith: { first, _ in first }
+        )
 
         for report in reports {
             onProgress(
@@ -71,7 +56,6 @@ enum Sweeper {
 
             let worktree = report.worktree
 
-            // Re-check liveness now, not when the list was built.
             if let holder = ProcessProbe.holder(of: worktree.path, among: holders) {
                 outcome.skipped.append(Item(path: worktree.path, reason: "\(holder.command) started working here"))
                 log("sweep skipped \(worktree.path): held by \(holder.command) (\(holder.pid))")
@@ -82,14 +66,13 @@ enum Sweeper {
                 continue
             }
 
-            // Rescan artifacts rather than trusting the cached list, so a folder
-            // deleted since the scan is not deleted twice and a new one is caught.
             for artifact in ArtifactScanner.scan(worktree: worktree.path, fileManager: fileManager) {
                 guard isContained(artifact.path, within: worktree.path) else {
                     outcome.skipped.append(Item(path: artifact.path, reason: "resolved outside its worktree"))
                     continue
                 }
-                let size = ArtifactScanner.allocatedSize(of: artifact.path, fileManager: fileManager)
+                let size = knownSizes[artifact.path]
+                    ?? ArtifactScanner.allocatedSize(of: artifact.path, fileManager: fileManager)
                 do {
                     try fileManager.removeItem(atPath: artifact.path)
                     outcome.freedBytes += size
@@ -105,10 +88,6 @@ enum Sweeper {
         return outcome
     }
 
-    // MARK: - Prune
-
-    /// Clears metadata for worktrees git already considers dead. Nothing on disk
-    /// is touched, because by definition the directories are already gone.
     static func prune(
         repositories: [String],
         log: (String) -> Void = { _ in }
@@ -128,54 +107,36 @@ enum Sweeper {
         return outcome
     }
 
-    // MARK: - Remove
-
-    /// Deletes a worktree directory, then its git metadata, then optionally its
-    /// branch.
-    ///
-    /// Order matters and is not negotiable. Removing the directory before
-    /// pruning leaves git believing the worktree exists; pruning first while the
-    /// directory is live orphans it. Any failed step aborts the rest.
-    /// - Parameter force: proceed despite an overridable blocker. Absolute
-    ///   blockers still refuse: no confirmation makes it safe to delete a
-    ///   directory a process is writing to, or to remove a repository's own
-    ///   working copy.
     static func remove(
         report: WorktreeReport,
         scanner: WorktreeScanner,
         deleteBranch: Bool,
         rescueDirectory: URL?,
-        force: Bool = false,
         fileManager: FileManager = .default,
         log: (String) -> Void = { _ in }
     ) -> Outcome {
         var outcome = Outcome()
         let worktree = report.worktree
 
-        // 1. Recompute from scratch. A cached verdict is never trusted here,
-        //    and that applies to a forced removal too: the check that changes
-        //    is which blockers are fatal, never whether the check runs.
         let holders = ProcessProbe.currentHolders()
-        let current = scanner.verdict(for: worktree, holders: holders)
-        if !current.canRemove {
-            guard force, current.canForceRemove else {
-                let reason = current.blocker?.severity == .absolute
-                    ? "\(current.label) — this cannot be overridden"
-                    : current.label
-                outcome.skipped.append(Item(path: worktree.path, reason: reason))
-                log("remove refused \(worktree.path): \(reason)")
-                return outcome
-            }
-            // Record what the user chose to discard. If they later wonder where
-            // that branch went, the log is the only place that can answer.
-            log("remove FORCED \(worktree.path): overriding \(current.label)")
+        let current = scanner.verdict(
+            for: worktree,
+            holders: holders,
+            prMerged: report.mergedAtHead
+        )
+        guard current.canRemove else {
+            outcome.skipped.append(Item(path: worktree.path, reason: current.label))
+            log("remove refused \(worktree.path): \(current.label)")
+            return outcome
+        }
+        if let blocker = current.blocker {
+            log("remove with work \(worktree.path): \(blocker.summary)")
         }
         guard scanner.isInsideAllowedRoot(worktree.path) else {
             outcome.skipped.append(Item(path: worktree.path, reason: "outside the configured roots"))
             return outcome
         }
 
-        // 2. Copy out anything git has no record of, before anything is destroyed.
         if let rescueDirectory {
             rescueIgnoredConfig(
                 worktree: worktree,
@@ -186,8 +147,6 @@ enum Sweeper {
             )
         }
 
-        // A locked worktree has to be released before git will prune it, so
-        // unlock as part of the override rather than leaving stale metadata.
         if worktree.isLocked {
             let unlock = Git.run(["worktree", "unlock", worktree.path], in: worktree.repoPath)
             log(unlock.succeeded ? "unlocked \(worktree.path)" : "unlock failed: \(unlock.stderr)")
@@ -195,7 +154,6 @@ enum Sweeper {
 
         let size = ArtifactScanner.allocatedSize(of: worktree.path, fileManager: fileManager)
 
-        // 3. Trash, not remove. Unique content has no other undo.
         do {
             try fileManager.trashItem(at: URL(fileURLWithPath: worktree.path), resultingItemURL: nil)
             outcome.freedBytes += size
@@ -204,22 +162,21 @@ enum Sweeper {
         } catch {
             outcome.failures.append(Item(path: worktree.path, reason: error.localizedDescription))
             log("remove failed \(worktree.path): \(error.localizedDescription)")
-            return outcome // never continue past a failed step
+            if worktree.isLocked {
+                Git.run(["worktree", "lock", "--reason", worktree.lockReason, worktree.path], in: worktree.repoPath)
+            }
+            return outcome
         }
 
-        // 4. Only now is it safe to clear the metadata.
+        if worktree.isOrphan { return outcome }
         let pruneResult = Git.prune(repo: worktree.repoPath)
         if !pruneResult.succeeded {
             outcome.failures.append(Item(path: worktree.repoPath, reason: "prune failed: \(pruneResult.stderr)"))
             return outcome
         }
 
-        // 5. Opt-in, and `-d` so git keeps its veto over unmerged work.
         if deleteBranch, let branch = worktree.branch {
-            // `-d` normally, `-D` only when the user already chose to discard
-            // unmerged work — otherwise git's veto would silently keep a branch
-            // the user explicitly asked to delete.
-            let result = force
+            let result = report.mergedAtHead
                 ? Git.run(["branch", "-D", branch], in: worktree.repoPath)
                 : Git.deleteBranch(branch, repo: worktree.repoPath)
             if result.succeeded {
@@ -237,10 +194,7 @@ enum Sweeper {
         return outcome
     }
 
-    /// Copies gitignored config out to a rescue folder. These files are the only
-    /// thing in a worktree that exists nowhere else, so they are saved even
-    /// though the removal itself goes to the Trash.
-    private static func rescueIgnoredConfig(
+    static func rescueIgnoredConfig(
         worktree: Worktree,
         scanner: WorktreeScanner,
         into rescueRoot: URL,
@@ -250,9 +204,10 @@ enum Sweeper {
         let files = scanner.ignoredConfigFiles(in: worktree.path)
         guard !files.isEmpty else { return }
 
+        let stamp = Date.now.formatted(.iso8601.timeSeparator(.omitted))
         let destination = rescueRoot
             .appending(path: worktree.repoName)
-            .appending(path: worktree.name)
+            .appending(path: "\(worktree.name) \(stamp)")
         do {
             try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
         } catch {
@@ -279,8 +234,6 @@ enum Sweeper {
         }
     }
 
-    /// Guards against a symlink inside a worktree resolving to somewhere else on
-    /// disk. String prefixes alone are not enough, because the string can lie.
     private static func isContained(_ path: String, within root: String) -> Bool {
         let resolvedRoot = URL(fileURLWithPath: root).resolvingSymlinksInPath().path
         let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path

@@ -1,8 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// Standard macOS settings: a tabbed window of grouped forms, sized to its
-/// content, using system controls throughout.
 struct SettingsView: View {
     var body: some View {
         TabView {
@@ -13,7 +11,51 @@ struct SettingsView: View {
             AboutSettings()
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(width: 520, height: 430)
+        .font(.ui)
+        .tint(.white)
+        .frame(width: 580, height: 560)
+        .toolbarBackground(.black, for: .windowToolbar)
+        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+        .background(.black)
+    }
+}
+
+private struct SettingsForm<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        Form { content }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .background(.black)
+            .contentMargins(.horizontal, Space.xl, for: .scrollContent)
+            .contentMargins(.vertical, Space.l, for: .scrollContent)
+    }
+}
+
+private struct SettingsHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.heading(17))
+            .foregroundStyle(.primary)
+            .textCase(nil)
+            .padding(.top, Space.s)
+            .padding(.bottom, Space.xs)
+    }
+}
+
+private struct Hint: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.uiCaption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -22,66 +64,59 @@ private struct GeneralSettings: View {
     @EnvironmentObject private var updater: Updater
 
     var body: some View {
-        Form {
+        SettingsForm {
             Section {
-                Toggle("Show reclaimable space in the menu bar", isOn: $settings.showSizeInMenuBar)
-                LabeledContent("Show once it passes") {
-                    HStack {
+                Toggle("Show reclaimable space", isOn: $settings.showSizeInMenuBar)
+                LabeledContent("Show from") {
+                    HStack(spacing: Space.m) {
                         Slider(value: $settings.notifyThresholdGB, in: 1...50, step: 1)
+                            .frame(width: 180)
                         Text("\(Int(settings.notifyThresholdGB)) GB")
                             .monospacedDigit()
+                            .numeric(settings.notifyThresholdGB)
                             .frame(width: 48, alignment: .trailing)
                     }
                 }
                 .disabled(!settings.showSizeInMenuBar)
-                Toggle("Show in Dock and give Coppice a menu bar", isOn: $settings.showsDockIcon)
+                Toggle("Show Coppice in the Dock", isOn: $settings.showsDockIcon)
             } header: {
-                Text("Menu Bar")
+                SettingsHeader(title: "Menu bar")
             } footer: {
-                Text("""
-                Takes effect the next time Coppice launches. It is applied once at \
-                startup rather than live, because switching it while running resizes \
-                every open window mid-layout and can crash the app.
-                """)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Hint("Dock changes apply the next time Coppice opens.")
             }
 
             Section {
-                Toggle("Rescue gitignored config before removing", isOn: $settings.rescueIgnoredConfig)
-                Button("Open Rescue Folder") {
-                    try? FileManager.default.createDirectory(
-                        at: settings.rescueDirectory,
-                        withIntermediateDirectories: true
-                    )
-                    NSWorkspace.shared.open(settings.rescueDirectory)
+                Toggle("Save .env files before removing", isOn: $settings.rescueIgnoredConfig)
+                LabeledContent("Saved to") {
+                    Button(settings.rescueDirectory.lastPathComponent) {
+                        try? FileManager.default.createDirectory(
+                            at: settings.rescueDirectory,
+                            withIntermediateDirectories: true
+                        )
+                        NSWorkspace.shared.open(settings.rescueDirectory)
+                    }
+                    .buttonStyle(.link)
+                    .foregroundStyle(.primary)
                 }
             } header: {
-                Text("Safety")
-            } footer: {
-                Text("""
-                Copies files like .env.local into \(settings.rescueDirectory.lastPathComponent) first. \
-                Git has no copy of these, so this is the only backup they get.
-                """)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                SettingsHeader(title: "Safety")
             }
 
             Section {
                 Toggle("Check for updates automatically", isOn: $settings.autoUpdateCheck)
                 LabeledContent("Status") {
-                    HStack(spacing: 8) {
-                        Text(updater.statusText).foregroundStyle(.secondary)
-                        Button("Check Now") { Task { await updater.checkNow() } }
-                            .controlSize(.small)
+                    HStack(spacing: Space.m) {
+                        Text(updater.statusText)
+                            .foregroundStyle(.secondary)
+                            .numeric(updater.statusText)
+                        Button("Check now") { Task { await updater.checkNow() } }
                             .disabled(updater.isBusy || !Channel.current.updatesEnabled)
                     }
                 }
             } header: {
-                Text("Updates")
+                SettingsHeader(title: "Updates")
             }
         }
-        .formStyle(.grouped)
     }
 }
 
@@ -90,29 +125,33 @@ private struct ScanningSettings: View {
     @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
-        Form {
+        SettingsForm {
             Section {
                 ForEach(settings.codeRoots, id: \.self) { root in
-                    HStack {
-                        Label(root.lastPathComponent, systemImage: "folder")
+                    HStack(spacing: Space.m) {
+                        Image(systemName: "folder")
+                            .foregroundStyle(.secondary)
+                        Text((root.path as NSString).abbreviatingWithTildeInPath)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                         Spacer()
                         Button {
                             settings.codeRoots = settings.codeRoots.filter { $0 != root }
                             model.settingsChanged()
                         } label: {
-                            Image(systemName: "minus.circle.fill")
+                            Image(systemName: "minus.circle")
                         }
+                        .accessibilityLabel("Stop scanning this folder")
                         .buttonStyle(.borderless)
                         .foregroundStyle(.secondary)
+                        .help("Stop scanning this folder")
                     }
                 }
-                Button("Add Folder…") { addRoot() }
+                Button("Add folder…") { addRoot() }
             } header: {
-                Text("Code Folders")
+                SettingsHeader(title: "Code folders")
             } footer: {
-                Text("Agent worktree directories are always scanned and cannot be removed from this list.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Hint("Agent worktree folders are always scanned.")
             }
 
             Section {
@@ -122,47 +161,44 @@ private struct ScanningSettings: View {
                     }
                 }
             } header: {
-                Text("Show Worktrees From")
+                SettingsHeader(title: "Agents")
             }
 
             Section {
                 Toggle("Check pull request status", isOn: $settings.checkPullRequests)
                     .disabled(!model.canCheckPullRequests)
-                if !model.canCheckPullRequests {
-                    Text("""
-                    Requires the GitHub CLI (gh). Without it Coppice still works, \
-                    it just cannot tell whether a branch is finished.
-                    """)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                if model.canCheckPullRequests {
+                    LabeledContent("Refresh") {
+                        Button("Check now") { model.fetchPullRequests() }
+                            .disabled(model.isCheckingPullRequests)
+                    }
+                } else {
+                    Hint("Needs the GitHub CLI (gh).")
                 }
-                Button("Check Now") { model.fetchPullRequests() }
-                    .disabled(!model.canCheckPullRequests || model.isCheckingPullRequests)
             } header: {
-                Text("Pull Requests")
+                SettingsHeader(title: "Pull requests")
             } footer: {
-                Text("""
-                A merged or closed pull request means a branch is finished, which is how \
-                Coppice knows leftover edits in that worktree are probably scratch work \
-                rather than something to protect.
-                """)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Hint("A merged pull request marks a branch as finished.")
             }
 
             Section {
-                LabeledContent("Recent session window") {
-                    HStack {
+                LabeledContent("Recent session") {
+                    HStack(spacing: Space.m) {
                         Slider(value: $settings.recentSessionHours, in: 1...168, step: 1)
-                        Text("\(Int(settings.recentSessionHours))h")
+                            .frame(width: 180)
+                        Text("\(Int(settings.recentSessionHours)) h")
                             .monospacedDigit()
+                            .numeric(settings.recentSessionHours)
                             .frame(width: 48, alignment: .trailing)
                     }
                 }
-                Button("Rescan Now") { model.settingsChanged() }
+                LabeledContent("Scan") {
+                    Button("Rescan now") { model.settingsChanged() }
+                }
+            } header: {
+                SettingsHeader(title: "Sessions")
             }
         }
-        .formStyle(.grouped)
     }
 
     private func harnessBinding(_ harness: Harness) -> Binding<Bool> {
@@ -191,47 +227,42 @@ private struct ScanningSettings: View {
 
 private struct AboutSettings: View {
     var body: some View {
-        VStack(spacing: 14) {
-            Spacer()
+        VStack(spacing: 0) {
+            Spacer(minLength: Space.xl)
 
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .frame(width: 72, height: 72)
+            GrowingStump(lineWidth: 1.3)
+                .frame(height: 120)
 
-            VStack(spacing: 3) {
-                Text(Channel.current.displayName).font(.title3).fontWeight(.semibold)
-                Text("Version \(Updater.currentVersion)")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            Text("""
-            Cuts agent worktrees back so they grow again. Sweeping removes build output that \
-            any install command rebuilds. Removing is gated behind eleven checks, all re-run \
-            at the moment of deletion.
-            """)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            (Text("Cut it back. ") + Text("It grows again.").font(.display(30, italic: true)))
+                .font(.display(30))
                 .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 32)
+                .padding(.top, Space.xl)
 
-            HStack {
-                Button("Activity Log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
-                Button("Source Code") {
+            Text("\(Channel.current.displayName) \(Updater.currentVersion)")
+                .font(.uiCallout)
+                .foregroundStyle(.secondary)
+                .padding(.top, Space.s)
+
+            HStack(spacing: Space.xl) {
+                Button("Activity log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
+                Button("Source code") {
                     if let url = URL(string: "https://github.com/\(Updater.repository)") {
                         NSWorkspace.shared.open(url)
                     }
                 }
             }
+            .buttonStyle(.link)
+            .foregroundStyle(.primary)
+            .padding(.top, Space.xl)
 
-            Spacer()
+            Spacer(minLength: Space.xl)
 
-            Text("MIT · Syntax Lab Technology")
-                .font(.caption)
+            Text("MIT licensed. Syntax Lab Technology.")
+                .font(.uiCaption)
                 .foregroundStyle(.tertiary)
+                .padding(.bottom, Space.xl)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(20)
+        .background(.black)
     }
 }

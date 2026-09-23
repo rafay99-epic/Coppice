@@ -1,17 +1,4 @@
 #!/bin/bash
-# Creates the stable self-signed code-signing certificate Coppice releases use,
-# and prints the base64 .p12 to paste into the repo secrets.
-#
-# Why this exists: macOS keys permission grants (Full Disk Access here) and
-# Gatekeeper identity to the code signature. An ad-hoc signature is different on
-# every build, so each auto-update would look like a brand-new app and silently
-# drop the grant the user already gave. One stable identity means one designated
-# requirement across every release, so the grant persists.
-#
-# There is no paid Apple Developer account behind this, so builds are not
-# notarized — the Homebrew cask is the smooth install path.
-#
-# Usage: ./Scripts/make-signing-cert.sh [common-name]
 set -euo pipefail
 
 NAME="${1:-Coppice Signing}"
@@ -42,12 +29,6 @@ openssl req -x509 -newkey rsa:2048 -nodes \
   -days 3650 -config "$WORK/cert.cnf" 2>/dev/null
 
 PASSWORD="$(openssl rand -base64 24)"
-# Legacy algorithms on purpose. OpenSSL 3 defaults to AES-256-CBC with a
-# SHA-256 MAC, and macOS `security` cannot import that: it fails with
-# "MAC verification failed during PKCS12 import (wrong password?)", which
-# blames the password and sends you looking in the wrong place entirely.
-# These three flags produce a .p12 the system keychain accepts. Harmless on
-# LibreSSL, which is what /usr/bin/openssl is.
 openssl pkcs12 -export \
   -inkey "$WORK/key.pem" -in "$WORK/cert.pem" \
   -out "$WORK/identity.p12" -passout "pass:$PASSWORD" \

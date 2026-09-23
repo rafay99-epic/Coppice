@@ -1,71 +1,83 @@
 import SwiftUI
 
-/// The panel that drops out of the status item.
-///
-/// Answers one question — is there anything worth reclaiming — and offers the
-/// reversible action. Everything destructive lives in the window, behind a
-/// selection and a typed confirmation.
 struct MenuBarView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var updater: Updater
     @Environment(\.openWindow) private var openWindow
+    @State private var armedSweep = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
-                .padding(12)
+            hero
+                .padding(.horizontal, Space.xl)
+                .padding(.top, Space.xl)
+                .padding(.bottom, Space.l)
 
             if case .available(let release) = updater.status {
-                Divider()
                 updateCallout(release)
+                    .padding(.horizontal, Space.l)
+                    .padding(.bottom, Space.m)
             }
 
             if let banner = model.banner {
-                Divider()
                 BannerView(banner: banner) { model.banner = nil }
+                    .padding(.horizontal, Space.l)
+                    .padding(.bottom, Space.m)
             }
 
-            Divider()
+            Divider().opacity(0.5)
 
-            if model.visibleReports.isEmpty {
-                emptyState
-            } else {
-                breakdown
-            }
-
-            Divider()
-            footer
-                .padding(12)
-        }
-        .frame(width: 300)
-    }
-
-    // MARK: Header
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Image(systemName: "scissors")
-                    .font(.system(size: 17))
-                    .foregroundStyle(model.reclaimableBytes > 0 ? .green : .secondary)
-                    .frame(width: 22)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(headline).font(.headline)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            Group {
+                if model.visibleReports.isEmpty {
+                    emptyState
+                } else {
+                    breakdown
                 }
-                Spacer()
             }
-            if model.activity.isBusy {
+            .padding(.horizontal, Space.xl)
+            .padding(.vertical, Space.l)
+
+            Divider().opacity(0.5)
+
+            footer
+                .padding(.horizontal, Space.xl)
+                .padding(.vertical, Space.l)
+        }
+        .font(.ui)
+        .frame(width: 300)
+        .animation(.smooth(duration: 0.25), value: armedSweep)
+        .onDisappear { armedSweep = false }
+        .background(.black)
+        .animation(.smooth, value: model.banner)
+        .animation(.smooth, value: model.activity.isMutating)
+    }
+
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: Space.s) {
+            SectionLabel(heroLabel)
+            Text(heroValue)
+                .font(.display(40))
+                .foregroundStyle(model.reclaimableBytes > 0 ? .primary : .secondary)
+                .numeric(heroValue)
+            Text(subtitle)
+                .font(.uiCaption)
+                .foregroundStyle(.secondary)
+                .numeric(subtitle)
+            if model.activity.isMutating {
                 ActivityBar(activity: model.activity)
+                    .padding(.top, Space.s)
             }
         }
     }
 
-    private var headline: String {
-        if model.isScanning, model.visibleReports.isEmpty { return "Scanning…" }
-        if model.reclaimableBytes == 0 { return "Nothing to reclaim" }
-        return "\(Format.bytes(model.reclaimableBytes)) reclaimable"
+    private var heroLabel: String {
+        model.isScanning && model.visibleReports.isEmpty ? "Scanning" : "Reclaimable"
+    }
+
+    private var heroValue: String {
+        if model.isScanning, model.visibleReports.isEmpty { return "…" }
+        return Format.compactBytes(model.reclaimableBytes)
     }
 
     private var subtitle: String {
@@ -74,122 +86,112 @@ struct MenuBarView: View {
         return "\(model.visibleReports.count) worktrees in \(repos) repo\(repos == 1 ? "" : "s")"
     }
 
-    // MARK: Body
-
     private var emptyState: some View {
         Text(model.isScanning
-             ? "Reading git metadata across your scan folders."
-             : "Nothing found. Add a folder in Settings if that looks wrong.")
-            .font(.callout)
+             ? "Reading git metadata in your folders."
+             : "Nothing found. Add a folder in Settings.")
+            .font(.uiCallout)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(12)
     }
 
     private var breakdown: some View {
-        VStack(spacing: 0) {
-            row(
-                title: "Safe to sweep",
-                detail: "\(model.sweepCandidates.count) worktrees",
-                value: Format.compactBytes(model.reclaimableBytes),
-                symbol: "scissors",
-                tint: .green
-            )
-            row(
-                title: "Protected",
-                detail: "Coppice will not remove these",
-                value: "\(model.protectedCount)",
-                symbol: "lock.fill",
-                tint: .red
-            )
-            if !model.prunableReports.isEmpty {
-                row(
-                    title: "Stale metadata",
-                    detail: "Directories already gone",
-                    value: "\(model.prunableReports.count)",
-                    symbol: "clock.arrow.circlepath",
-                    tint: .secondary
-                )
+        VStack(spacing: Space.m) {
+            row("Safe to sweep", detail: "\(model.sweepCandidates.count) worktrees", value: Format.compactBytes(model.reclaimableBytes))
+            row("Has work", detail: "Uncommitted or unpushed", value: "\(model.hasWorkCount)")
+            let stale = model.visibleReports.filter { Scope.stale.contains($0) }.count
+            if stale > 0 {
+                row("Stale", detail: "Folder gone or repo missing", value: "\(stale)")
             }
         }
-        .padding(.vertical, 4)
     }
 
-    private func row(
-        title: String,
-        detail: String,
-        value: String,
-        symbol: String,
-        tint: Color
-    ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol)
-                .foregroundStyle(tint)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.callout)
-                Text(detail).font(.caption).foregroundStyle(.secondary)
+    private func row(_ title: String, detail: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.m) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text(title)
+                Text(detail).font(.uiCaption).foregroundStyle(.tertiary)
             }
-            Spacer(minLength: 8)
-            Text(value).font(.callout).monospacedDigit().foregroundStyle(.secondary)
+            Spacer(minLength: Space.s)
+            Text(value)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .numeric(value)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 5)
     }
 
     private func updateCallout(_ release: Updater.Release) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "arrow.down.circle.fill").foregroundStyle(.blue)
-            Text("Version \(release.version) available").font(.callout)
-            Spacer()
+        HStack(spacing: Space.m) {
+            Text("Version \(release.version) is ready")
+                .font(.uiCallout)
+            Spacer(minLength: Space.s)
             Button("Update") { Task { await updater.installUpdate() } }
-                .controlSize(.small)
+                .buttonStyle(.mono)
                 .disabled(updater.isBusy)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.blue.opacity(0.12))
+        .padding(Space.m)
+        .background(.white.opacity(0.06), in: .rect(cornerRadius: 8))
     }
 
-    // MARK: Footer
-
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Button {
-                    Task { await model.sweep(model.sweepCandidates) }
-                } label: {
-                    Label("Sweep", systemImage: "scissors")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(model.sweepCandidates.isEmpty || model.isWorking)
+        VStack(alignment: .leading, spacing: Space.m) {
+            HStack(spacing: Space.m) {
+                if armedSweep {
+                    Button {
+                        armedSweep = false
+                        Task { await model.sweep(model.sweepCandidates) }
+                    } label: {
+                        Text("Sweep \(Format.compactBytes(model.reclaimableBytes))?")
+                    }
+                    .buttonStyle(.mono)
+                    .transition(.blurReplace)
 
-                Button("Open Coppice") { openMainWindow(openWindow) }
+                    Button("Cancel") { armedSweep = false }
+                        .buttonStyle(.plain)
+                        .fixedSize()
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button {
+                        armedSweep = true
+                    } label: {
+                        Label("Sweep", systemImage: "scissors")
+                    }
+                    .buttonStyle(.mono)
+                    .disabled(model.sweepCandidates.isEmpty || model.isWorking)
+                    .transition(.blurReplace)
+
+                    Button("Open Coppice") { openMainWindow(openWindow) }
+                        .buttonStyle(.plain)
+                        .fixedSize()
+                        .foregroundStyle(.secondary)
+                }
 
                 Spacer()
 
                 Menu {
                     Button("Rescan") { model.rescan() }
                         .disabled(model.isScanning)
-                    Button("Prune \(model.prunableReports.count) Stale") { Task { await model.prune() } }
+                    Button("Prune \(model.prunableReports.count) stale") { Task { await model.prune() } }
                         .disabled(model.prunableReports.isEmpty || model.isWorking)
                     Divider()
                     SettingsLink { Text("Settings…") }
-                    Button("Activity Log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
+                    Button("Activity log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
                     Divider()
                     Button("Quit Coppice") { NSApplication.shared.terminate(nil) }
                         .keyboardShortcut("q")
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "ellipsis")
+                        .foregroundStyle(.secondary)
                 }
+                .accessibilityLabel("More")
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
             }
 
             if let last = model.lastScan {
-                Text("Last checked \(last.formatted(date: .omitted, time: .shortened))")
-                    .font(.caption)
+                Text("Checked at \(last.formatted(date: .omitted, time: .shortened))")
+                    .font(.uiCaption)
                     .foregroundStyle(.tertiary)
             }
         }
