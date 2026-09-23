@@ -1,0 +1,81 @@
+apps/desktop/Sources/Coppice/Views/Theme.swift
+  s_3e3dfec32bf217::t_e8c7f63d45fe2e 5,13,17,23-28,79-80,82
+  s_3e3dfec32bf217::t_7d12c0a4eeaf96 96
+  s_3e3dfec32bf217::t_7ca6760aead81d 4,6-8,14-16,18,33-59,66,69
+apps/desktop/Tests/CoppiceTests/VerdictTests.swift
+  s_3e3dfec32bf217::t_f47d0650cfd2a0 299-336
+  s_3e3dfec32bf217::t_3f46baad37de72 166-167,245-250,275-276,278-280,282-284,286-288
+apps/desktop/Tests/CoppiceTests/ParsingTests.swift
+  s_3e3dfec32bf217::t_3f46baad37de72 157,172-173,236
+apps/desktop/Sources/Coppice/Services/WorktreeScanner.swift
+  s_3e3dfec32bf217::t_ded0005910e778 86,122,127,140-141,161,168-192,194,196-198,203-204,207-208,210-212,218-219,222-224,226-228,232,234-236,238,241,244,251-252
+apps/desktop/Sources/Coppice/Services/Sweeper.swift
+  s_3e3dfec32bf217::t_f1b1fdb09289dd 127-133,176
+  s_3e3dfec32bf217::t_3f46baad37de72 194
+  s_3e3dfec32bf217::t_d05e2dcdaf78fa 41-44,74-75,122-126,168,204,207
+  s_3e3dfec32bf217::t_2840c76e686109 165
+apps/desktop/Sources/Coppice/Views/OnboardingView.swift
+  s_3e3dfec32bf217::t_ec2f95defb4110 61,160
+  s_3e3dfec32bf217::t_3cd1475da07d63 35-36,41-44,48,58,116,125,134,144
+  s_3e3dfec32bf217::t_ffd267d71e1a68 9,12-30,34,37,40,49-54,56-57,59,65,68-80,83,86-97,100-106,109-115,117,121-124,128-133,135,139-143,145-146,154-155,158-159,161,163-166
+apps/desktop/Sources/Coppice/Views/MenuBarView.swift
+  s_3e3dfec32bf217::t_dd5f05f40be584 94-97
+  s_3e3dfec32bf217::t_7d12c0a4eeaf96 56
+  s_3e3dfec32bf217::t_3cd1475da07d63 37-39,47-48,51-52,91,98,129,137,146,157
+apps/desktop/Scripts/MakeIcon.swift
+  s_3e3dfec32bf217::t_7d8bdcce942485 14-16,38-39,44,51-52,54-59,61-66,71-72,82-84,91-92,94-102,108-125
+  s_3e3dfec32bf217::t_5537bf13aa3048 49-50,53,70,73-81,85-90,93,105-107
+apps/desktop/Sources/Coppice/App/CoppiceApp.swift
+  s_3e3dfec32bf217::t_92e1151f0e9c24 159
+  s_3e3dfec32bf217::t_0dc3016fdc9c88 30-31,40-41,52-53
+  s_3e3dfec32bf217::t_7d12c0a4eeaf96 85,148,152
+apps/desktop/Sources/Coppice/Services/AppSettings.swift
+  s_3e3dfec32bf217::t_a6ab8e3d4b386b 6-7,19-22,24,34-39
+apps/desktop/Sources/Coppice/Views/ActivityViews.swift
+  s_3e3dfec32bf217::t_8cab14b0cf8260 108
+  s_3e3dfec32bf217::t_3cd1475da07d63 16,49
+apps/desktop/Sources/Coppice/Models/AppModel.swift
+  s_3e3dfec32bf217::t_2f62d652db3579 96-98,116,122,124-126,132,137,169-175,188,190-193,195-203,205,209,212,214-215,226,229-233,241-243,245-246,249,262-280,284-299,307,344,373,377,389,398,404-405,410
+  s_3e3dfec32bf217::t_b303c05564611a 82
+apps/desktop/Sources/Coppice/Services/DirectoryWatcher.swift
+  s_3e3dfec32bf217::t_28c1e67616e322 11,18,22,45,48-49
+apps/desktop/Sources/Coppice/Views/MainView.swift
+  s_3e3dfec32bf217::t_24527874be8daa 49,91-95,140-162
+  s_3e3dfec32bf217::t_92e1151f0e9c24 117-119
+  s_3e3dfec32bf217::t_0dc3016fdc9c88 183,189-191,249-251,318-320,325
+  s_3e3dfec32bf217::t_7d12c0a4eeaf96 20-23,25-29,67,103,163,167,176-180,192-195,201,209,213,279,281,283
+  s_3e3dfec32bf217::t_dd5f05f40be584 6,14,24,34,66
+  s_3e3dfec32bf217::t_199c4d4780bb9b 164
+apps/desktop/Sources/Coppice/Models/Harness.swift
+  s_3e3dfec32bf217::t_0f544db8ba69af 91
+apps/desktop/Sources/Coppice/Views/InspectorView.swift
+  s_3e3dfec32bf217::t_3cd1475da07d63 41,92-95,290,308
+  s_3e3dfec32bf217::t_07bc1836e079a5 223,226,228-229,232-237,265-266,305,314-316
+  s_3e3dfec32bf217::t_e8c7f63d45fe2e 16,22-23,149-150,153-161,175,180,186,210,214,216,231,238-241,245-252,259-264,267-271,277-289,291,296,304,309,313
+apps/desktop/Sources/Coppice/Views/StumpShape.swift
+  s_3e3dfec32bf217::t_2e663523578131 1-58
+apps/desktop/Sources/Coppice/Services/ArtifactScanner.swift
+  s_3e3dfec32bf217::t_d05e2dcdaf78fa 44-46,57-62
+  s_3e3dfec32bf217::t_2840c76e686109 47,82
+apps/desktop/Sources/Coppice/Services/ProcessProbe.swift
+  s_3e3dfec32bf217::t_c308b07ecb9468 17
+apps/desktop/Sources/Coppice/Models/Worktree.swift
+  s_3e3dfec32bf217::t_f1b1fdb09289dd 55-56,104-105,108,110,112,114,116,118,120-121,126-132,166-171,174,176-179,183-187,212-217
+  s_3e3dfec32bf217::t_0f544db8ba69af 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "59a241987ce4af3103805a75f97eb7c109d0c236",
+  "prompts": {},
+  "sessions": {
+    "s_3e3dfec32bf217": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fc78b36b-49ba-4f4d-b965-573ed26d3610",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
