@@ -2,10 +2,6 @@
 
 import { useState } from "react";
 
-/**
- * The install command. Styled as a soft macOS field rather than a terminal
- * block: no prompt glyph, no green-on-black, just the text you need to copy.
- */
 export function CopyCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -20,16 +16,16 @@ export function CopyCommand({ command }: { command: string }) {
   }
 
   return (
-    <div className="flex items-center gap-4 rounded-2xl bg-surface px-5 py-4 transition-colors hover:bg-surface-2">
-      <code className="flex-1 overflow-x-auto whitespace-nowrap text-[15px] text-label">
+    <div className="flex min-w-0 items-center gap-3 border-b border-line py-3 transition-colors hover:border-label-3">
+      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[14px] text-label-2">
         {command}
       </code>
       <button
         type="button"
         onClick={copy}
         aria-label={`Copy: ${command}`}
-        className={`shrink-0 rounded-full px-4 py-1.5 text-[14px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green ${
-          copied ? "bg-green text-black" : "bg-surface-2 text-label hover:bg-surface-3"
+        className={`shrink-0 rounded-full px-3.5 py-1 text-[13px] font-medium transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+          copied ? "bg-white text-black" : "bg-surface-3 text-label hover:bg-label-3"
         }`}
       >
         {copied ? "Copied" : "Copy"}

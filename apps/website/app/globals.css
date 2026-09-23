@@ -1,50 +1,23 @@
 @import "tailwindcss";
 
-/*
-  The site should look like the app, because the app is the product.
-
-  Coppice is a native macOS window: SF Pro, Apple's dark-mode semantic label
-  colours, soft rounded surfaces, generous row spacing. So the site uses the
-  same vocabulary. No monospace as a texture, no hairline grids, no bordered
-  tiles. Structure comes from space and type size, not from drawing rectangles
-  around things.
-*/
 @theme {
   --color-page: #000000;
-
-  /* Apple's dark-mode surface ladder, the greys the app window itself uses. */
-  --color-surface: #1c1c1e;
-  --color-surface-2: #2c2c2e;
-  --color-surface-3: #3a3a3c;
-
-  /* Apple's dark-mode label colours. Secondary and tertiary are white with
-     alpha rather than fixed greys, so they sit correctly on any surface. */
+  --color-surface: #0e0e0e;
+  --color-surface-2: #181818;
+  --color-surface-3: #262626;
+  --color-line: #242424;
   --color-label: #ffffff;
-  --color-label-2: rgba(235, 235, 245, 0.62);
-  /* Apple's tertiaryLabel is 0.30 alpha, which lands at 2.6:1 on these
-     surfaces and fails AA. Raised until it passes for body text, since the
-     site uses it for real sentences rather than only for chrome. */
-  --color-label-3: rgba(235, 235, 245, 0.54);
+  --color-label-2: #a3a3a3;
+  --color-label-3: #6f6f6f;
 
-  /* System colours, dark variants. Same ones the app uses for its verdicts. */
-  --color-green: #30d158;
-  /* Two blues. The bright one is for text on dark surfaces; the deep one is
-     for filled buttons, because white on #0a84ff is only 3.65:1. */
-  --color-blue: #4da6ff;
-  --color-blue-solid: #0b6fd4;
-  --color-red: #ff5f55;
-  --color-orange: #ff9f0a;
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-sans: var(--font-instrument), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 
-  --font-sans:
-    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-    "Inter", system-ui, sans-serif;
+  --ease-grow: cubic-bezier(0.6, 0, 0.2, 1);
 }
 
 html {
   background: var(--color-page);
-  /* Smooth scrolling for anchors. Deliberately CSS rather than a scroll
-     hijacking library: those run a requestAnimationFrame loop for the whole
-     life of the page, which is a permanent repaint cost for a cosmetic effect. */
   scroll-behavior: smooth;
 }
 
@@ -58,36 +31,95 @@ body {
 }
 
 ::selection {
-  background: var(--color-green);
+  background: #fff;
   color: #000;
 }
 
-/* Apple's marketing type: large, tight, and set in the same face as the app. */
-.title {
-  letter-spacing: -0.028em;
-  line-height: 1.04;
-  font-weight: 600;
+.display {
+  font-family: var(--font-display);
+  font-weight: 300;
+  letter-spacing: -0.025em;
+  line-height: 1.02;
+  font-variation-settings: "SOFT" 50;
 }
 
-.title-2 {
-  letter-spacing: -0.022em;
-  line-height: 1.1;
-  font-weight: 600;
+.display em {
+  font-style: italic;
+  font-weight: 400;
 }
 
-/*
-  Motion. All of it is scroll driven, so it runs off the compositor while the
-  user is actually scrolling and costs nothing when they stop. No JavaScript,
-  no observers, no animation loop idling in the background.
+.line-art {
+  overflow: visible;
+}
 
-  Every hidden state lives inside @supports on purpose. A browser without
-  scroll-driven animations gets no rule at all and renders everything plainly,
-  so a page that cannot animate is still a page you can read.
-*/
+.line-art path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+.sprout path {
+  stroke-width: 2.2;
+}
+
+.line-art path.faint {
+  stroke: #5a5a5a;
+}
+
+.line-art path.dead {
+  stroke: #7a7a7a;
+}
+
+.link {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 0.35s var(--ease-grow), color 0.2s ease;
+}
+
+.link:hover {
+  background-size: 100% 1px;
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes wither {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  55% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.12;
+  }
+}
+
+@keyframes fade {
+  to {
+    opacity: 0.12;
+  }
+}
+
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(28px);
+    transform: translateY(24px);
   }
   to {
     opacity: 1;
@@ -95,65 +127,80 @@ body {
   }
 }
 
-@keyframes settle {
+@keyframes spine {
   from {
-    opacity: 0;
-    transform: translateY(48px) scale(0.965);
+    transform: scaleY(0);
   }
   to {
-    opacity: 1;
-    transform: none;
+    transform: scaleY(1);
   }
 }
 
-@keyframes drift {
-  from {
-    transform: translateY(38px);
+@media (prefers-reduced-motion: no-preference) {
+  .hero-tree path {
+    animation: draw 1.8s var(--ease-grow) var(--d) both;
   }
-  to {
-    transform: translateY(-38px);
-  }
-}
 
-@keyframes bloom {
-  from {
-    opacity: 0.25;
-    transform: scale(0.85);
+  .hero-tree path.dead {
+    animation:
+      draw 1.8s var(--ease-grow) var(--d) both,
+      fade 0.9s ease calc(var(--d) + 2.4s) forwards;
   }
-  to {
-    opacity: 0.8;
-    transform: scale(1.05);
-  }
-}
 
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .rise {
+  .intro {
+    animation: rise 0.9s var(--ease-grow) var(--i, 0s) both;
+  }
+
+  @supports (animation-timeline: view()) {
+    .sprout path {
+      animation: draw linear both;
+      animation-timeline: view();
+      animation-range: entry 20% cover 45%;
+    }
+
+    .sprout path.dead {
+      animation: wither linear both;
+      animation-timeline: view();
+      animation-range: entry 20% cover 60%;
+    }
+
+    .reveal {
       animation: rise linear both;
       animation-timeline: view();
-      animation-range: entry 0% entry 46%;
+      animation-range: entry 0% entry 55%;
     }
 
-    /* For the large pieces: they arrive with a little more travel and a
-       touch of scale, which reads as weight. */
-    .settle {
-      animation: settle linear both;
-      animation-timeline: view();
-      animation-range: entry 0% entry 62%;
+    .spine {
+      transform-origin: top;
+      animation: spine linear both;
+      animation-timeline: scroll(root);
     }
+  }
 
-    /* Slow counter-scroll on decorative layers only. Never on text. */
-    .drift {
-      animation: drift linear both;
-      animation-timeline: view();
-      animation-range: cover;
-    }
+  [data-grow="pending"].sprout path {
+    stroke-dashoffset: 1;
+  }
 
-    .bloom {
-      animation: bloom linear both;
-      animation-timeline: view();
-      animation-range: entry 0% cover 60%;
-    }
+  [data-grow="in"].sprout path {
+    transition: stroke-dashoffset 1.4s var(--ease-grow) var(--d, 0s);
+  }
+
+  [data-grow="in"].sprout path.dead {
+    opacity: 0.12;
+    transition:
+      stroke-dashoffset 1.4s var(--ease-grow) var(--d, 0s),
+      opacity 0.9s ease 1.8s;
+  }
+
+  [data-grow="pending"].reveal {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  [data-grow="in"].reveal {
+    transition:
+      opacity 0.8s ease,
+      transform 0.8s var(--ease-grow);
   }
 }
 
@@ -161,10 +208,25 @@ body {
   html {
     scroll-behavior: auto;
   }
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+
+  .hero-tree path,
+  .sprout path,
+  .reveal,
+  .intro,
+  .spine {
+    animation: none !important;
+    animation-timeline: none !important;
+    transition: none !important;
+    stroke-dashoffset: 0;
+    opacity: 1;
+    transform: none;
   }
+
+  .line-art path.dead {
+    opacity: 0.25 !important;
+  }
+}
+
+.hero-tree path {
+  stroke-width: 1.8;
 }
