@@ -1,0 +1,21 @@
+.github/workflows/promotion.yml
+  s_3e3dfec32bf217::t_c2b08330d38bc0 17,43-48,50-51,54-56,66-67
+docs/releasing.md
+  s_3e3dfec32bf217::t_c2b08330d38bc0 24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b96cbbc6965ae11dbe0ac1e99ab3b83781991276",
+  "prompts": {},
+  "sessions": {
+    "s_3e3dfec32bf217": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fc78b36b-49ba-4f4d-b965-573ed26d3610",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
