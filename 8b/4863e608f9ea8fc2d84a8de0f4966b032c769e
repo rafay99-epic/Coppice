@@ -1,0 +1,32 @@
+apps/desktop/Sources/Coppice/Models/Worktree.swift
+  s_3e3dfec32bf217::t_4cd8297b4e2253 18
+apps/desktop/Sources/Coppice/Services/WorktreeScanner.swift
+  s_3e3dfec32bf217::t_4cd8297b4e2253 35-39,43-50
+  s_3e3dfec32bf217::t_6164e8d2c290d8 51-52
+apps/desktop/Sources/Coppice/Views/MainView.swift
+  s_3e3dfec32bf217::t_cdabbb80c13d3f 195
+  s_3e3dfec32bf217::t_99a03cdf6caba1 64,82-83,87-111,226,241,243-251
+  s_3e3dfec32bf217::t_c05387d32fd3b6 206-225
+  s_3e3dfec32bf217::t_4d7c6b7b6d00e3 196-197,230-240
+  s_3e3dfec32bf217::t_8e49d45e3f5234 59-60
+apps/desktop/Tests/CoppiceTests/VerdictTests.swift
+  s_3e3dfec32bf217::t_cbb80052b4080f 338-348
+apps/desktop/Sources/Coppice/Views/InspectorView.swift
+  s_3e3dfec32bf217::t_8e49d45e3f5234 20-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8b4863e608f9ea8fc2d84a8de0f4966b032c769e",
+  "prompts": {},
+  "sessions": {
+    "s_3e3dfec32bf217": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fc78b36b-49ba-4f4d-b965-573ed26d3610",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
