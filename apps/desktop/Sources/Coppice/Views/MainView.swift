@@ -45,7 +45,6 @@ struct MainView: View {
     @State private var scope: Scope = .all
     @State private var showInspector = true
     @State private var search = ""
-    @State private var confirmingSweep = false
     @AppStorage("dismissedDiskAccess") private var dismissedDiskAccess = false
     @FocusState private var listFocused: Bool
     @State private var dismissedFailures: Set<String> = []
@@ -118,6 +117,9 @@ struct MainView: View {
             .animation(.snappy(duration: 0.2), value: selected)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(row.title)
+        .accessibilityValue("\(count) worktrees")
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .listRowInsets(EdgeInsets(top: 1, leading: Space.s, bottom: 1, trailing: Space.s))
     }
 
@@ -171,7 +173,7 @@ struct MainView: View {
         }
         .confirmationDialog(
             "Sweep build artifacts in \(model.sweepCandidates.count) worktrees?",
-            isPresented: $confirmingSweep,
+            isPresented: $model.confirmingSweep,
             titleVisibility: .visible
         ) {
             Button("Sweep \(Format.bytes(model.reclaimableBytes))") {
@@ -273,6 +275,8 @@ struct MainView: View {
                             .id(report.id)
                             .contentShape(.rect)
                             .onTapGesture { select(report.id) }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(report.accessibilitySummary)
                             .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
                             .accessibilityAction { select(report.id) }
                             .listRowInsets(EdgeInsets(top: 0, leading: Space.xl, bottom: 0, trailing: Space.xl))
@@ -376,7 +380,7 @@ struct MainView: View {
 
         ToolbarItem(placement: .primaryAction) {
             Button {
-                confirmingSweep = true
+                model.confirmingSweep = true
             } label: {
                 Label(
                     model.reclaimableBytes > 0 ? "Sweep \(Format.compactBytes(model.reclaimableBytes))" : "Sweep",
@@ -428,6 +432,13 @@ struct MainView: View {
         return report.worktree.name.lowercased().contains(needle)
             || report.worktree.displayBranch.lowercased().contains(needle)
             || report.worktree.repoName.lowercased().contains(needle)
+    }
+}
+
+extension WorktreeReport {
+    var accessibilitySummary: String {
+        let size = measured ? Format.bytes(totalBytes) : "size pending"
+        return "\(worktree.name), \(worktree.displayBranch), \(size), \(verdict.shortLabel)"
     }
 }
 

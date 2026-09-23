@@ -87,8 +87,8 @@ struct CoppiceCommands: Commands {
 
             Divider()
 
-            Button("Sweep Build Artifacts") {
-                Task { await model.sweep(model.sweepCandidates) }
+            Button("Sweep Build Artifacts…") {
+                model.confirmingSweep = true
             }
             .keyboardShortcut("k", modifiers: .command)
             .disabled(model.sweepCandidates.isEmpty || model.isWorking)

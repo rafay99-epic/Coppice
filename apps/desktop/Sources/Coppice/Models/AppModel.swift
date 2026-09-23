@@ -86,6 +86,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var detectedHarnesses: [Harness] = []
     @Published var banner: Banner?
     @Published var selection: String?
+    @Published var confirmingSweep = false
     @Published private(set) var unreadableRoots: [String] = []
     @Published private(set) var scanFailures: [Sweeper.Item] = []
 
@@ -100,7 +101,7 @@ final class AppModel: ObservableObject {
     private var hasStarted = false
     private var scanTask: Task<Void, Never>?
     private var measureTask: Task<Void, Never>?
-    private var rescanQueued = false
+    private var scheduler = ScanScheduler()
     private var pullRequestTask: Task<Void, Never>?
     private var lastPullRequestFetch: Date?
     private var pullRequestRepos: Set<String> = []
@@ -169,21 +170,35 @@ final class AppModel: ObservableObject {
         guard !paths.isEmpty else { return }
 
         let agentRoots = scanner.agentWorktreeRoots().map(\.root.path)
-        let isRelevant: @Sendable (String) -> Bool = { changed in
-            let path = changed.hasSuffix("/") ? String(changed.dropLast()) : changed
-            return path.contains("/.git/worktrees")
-                || agentRoots.contains { path == $0 || path.hasPrefix($0 + "/") }
-        }
+        let isRelevant: @Sendable (String) -> Bool = { ScanScheduler.isWorktreeChange($0, agentRoots: agentRoots) }
         watcher = DirectoryWatcher(paths: paths, isRelevant: isRelevant) { [weak self] in
-            Task { @MainActor in self?.rescan() }
+            Task { @MainActor in self?.requestScan(automatic: true) }
         }
         watcher?.start()
     }
 
     func rescan() {
-        if activity == .scanning { rescanQueued = true }
-        guard !activity.isBusy else { return }
-        rescanQueued = false
+        requestScan(automatic: false)
+    }
+
+    private func requestScan(automatic: Bool) {
+        guard !activity.isMutating else { return }
+        switch scheduler.request(automatic: automatic, now: Date()) {
+        case .wait:
+            return
+        case .deferred(let delay):
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                guard let self else { return }
+                self.scheduler.deferredFired()
+                self.requestScan(automatic: true)
+            }
+        case .scanNow:
+            performScan()
+        }
+    }
+
+    private func performScan() {
         scanTask?.cancel()
         measureTask?.cancel()
         activity = .scanning
@@ -232,8 +247,8 @@ final class AppModel: ObservableObject {
             }
             self.lastScan = Date()
             self.activity = .idle
-            if self.rescanQueued {
-                self.rescan()
+            if self.scheduler.finished(now: Date()) {
+                self.requestScan(automatic: false)
                 return
             }
             Log.shared.write(
@@ -339,7 +354,7 @@ final class AppModel: ObservableObject {
         guard !activity.isMutating else { return false }
         if activity == .scanning {
             scanTask?.cancel()
-            rescanQueued = false
+            scheduler.interrupted()
             activity = .idle
         }
         return true

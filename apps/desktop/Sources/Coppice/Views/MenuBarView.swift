@@ -5,6 +5,7 @@ struct MenuBarView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var updater: Updater
     @Environment(\.openWindow) private var openWindow
+    @State private var armedSweep = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -45,6 +46,8 @@ struct MenuBarView: View {
         }
         .font(.ui)
         .frame(width: 300)
+        .animation(.smooth(duration: 0.25), value: armedSweep)
+        .onDisappear { armedSweep = false }
         .background(.black)
         .animation(.smooth, value: model.banner)
         .animation(.smooth, value: model.activity.isMutating)
@@ -133,17 +136,33 @@ struct MenuBarView: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: Space.m) {
             HStack(spacing: Space.m) {
-                Button {
-                    Task { await model.sweep(model.sweepCandidates) }
-                } label: {
-                    Label("Sweep", systemImage: "scissors")
-                }
-                .buttonStyle(.mono)
-                .disabled(model.sweepCandidates.isEmpty || model.isWorking)
+                if armedSweep {
+                    Button {
+                        armedSweep = false
+                        Task { await model.sweep(model.sweepCandidates) }
+                    } label: {
+                        Text("Sweep \(Format.compactBytes(model.reclaimableBytes))?")
+                    }
+                    .buttonStyle(.mono)
+                    .transition(.blurReplace)
 
-                Button("Open Coppice") { openMainWindow(openWindow) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    Button("Cancel") { armedSweep = false }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button {
+                        armedSweep = true
+                    } label: {
+                        Label("Sweep", systemImage: "scissors")
+                    }
+                    .buttonStyle(.mono)
+                    .disabled(model.sweepCandidates.isEmpty || model.isWorking)
+                    .transition(.blurReplace)
+
+                    Button("Open Coppice") { openMainWindow(openWindow) }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                }
 
                 Spacer()
 
