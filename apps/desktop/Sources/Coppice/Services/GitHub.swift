@@ -12,6 +12,7 @@ struct PullRequest: Sendable, Hashable {
     let title: String
     let url: String
     let isDraft: Bool
+    var headOid: String?
 
     var isSettled: Bool { state == .merged || state == .closed }
 
@@ -54,7 +55,7 @@ enum GitHub {
                 "pr", "list",
                 "--state", "all",
                 "--limit", String(limit),
-                "--json", "number,state,title,url,isDraft,headRefName",
+                "--json", "number,state,title,url,isDraft,headRefName,headRefOid",
             ],
             cwd: repo,
             timeout: 25
@@ -74,7 +75,8 @@ enum GitHub {
                 state: state,
                 title: row.title,
                 url: row.url,
-                isDraft: row.isDraft
+                isDraft: row.isDraft,
+                headOid: row.headRefOid
             )
             if let existing = byBranch[row.headRefName] {
                 let replaces = (pullRequest.state == .open && existing.state != .open)
@@ -94,5 +96,6 @@ enum GitHub {
         let url: String
         let isDraft: Bool
         let headRefName: String
+        let headRefOid: String?
     }
 }

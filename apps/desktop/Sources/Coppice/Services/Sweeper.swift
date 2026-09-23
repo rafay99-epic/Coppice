@@ -122,7 +122,7 @@ enum Sweeper {
         let current = scanner.verdict(
             for: worktree,
             holders: holders,
-            prMerged: report.pullRequest?.state == .merged
+            prMerged: report.mergedAtHead
         )
         guard current.canRemove else {
             outcome.skipped.append(Item(path: worktree.path, reason: current.label))
@@ -162,6 +162,9 @@ enum Sweeper {
         } catch {
             outcome.failures.append(Item(path: worktree.path, reason: error.localizedDescription))
             log("remove failed \(worktree.path): \(error.localizedDescription)")
+            if worktree.isLocked {
+                Git.run(["worktree", "lock", "--reason", worktree.lockReason, worktree.path], in: worktree.repoPath)
+            }
             return outcome
         }
 
@@ -173,7 +176,7 @@ enum Sweeper {
         }
 
         if deleteBranch, let branch = worktree.branch {
-            let result = report.pullRequest?.state == .merged
+            let result = report.mergedAtHead
                 ? Git.run(["branch", "-D", branch], in: worktree.repoPath)
                 : Git.deleteBranch(branch, repo: worktree.repoPath)
             if result.succeeded {

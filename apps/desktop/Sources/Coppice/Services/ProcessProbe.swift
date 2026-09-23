@@ -42,7 +42,9 @@ enum ProcessProbe {
     }
 
     static func holder(of path: String, among holders: [Holder]) -> Holder? {
-        let prefix = path.hasSuffix("/") ? path : path + "/"
-        return holders.first { $0.cwd == path || $0.cwd.hasPrefix(prefix) }
+        let paths = Set([path, URL(fileURLWithPath: path).resolvingSymlinksInPath().path])
+        return holders.first { holder in
+            paths.contains { holder.cwd == $0 || holder.cwd.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") }
+        }
     }
 }

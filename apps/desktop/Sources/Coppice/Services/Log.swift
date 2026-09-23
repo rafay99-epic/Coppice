@@ -44,9 +44,4 @@ final class Log: @unchecked Sendable {
         try? FileManager.default.removeItem(at: previous)
         try? FileManager.default.moveItem(at: fileURL, to: previous)
     }
-
-    func recentLines(limit: Int = 200) -> [String] {
-        guard let contents = try? String(contentsOf: fileURL, encoding: .utf8) else { return [] }
-        return Array(contents.split(separator: "\n").map(String.init).suffix(limit))
-    }
 }

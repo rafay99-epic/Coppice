@@ -41,13 +41,11 @@ struct WorktreeScanner: @unchecked Sendable {
     }
 
     func parentRepository(ofWorktree path: String) -> String? {
-        let pointer = URL(fileURLWithPath: path).appending(path: ".git")
-        guard let contents = try? String(contentsOf: pointer, encoding: .utf8),
-              let line = contents.split(separator: "\n").first(where: { $0.hasPrefix("gitdir:") }) else { return nil }
-        let gitdir = line.dropFirst("gitdir:".count).trimmingCharacters(in: .whitespaces)
-        guard let range = gitdir.range(of: "/.git/worktrees/") else { return nil }
-        let repo = URL(fileURLWithPath: String(gitdir[..<range.lowerBound]))
-        return isRepository(repo) ? repo.resolvingSymlinksInPath().path : nil
+        let result = Git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], in: path)
+        guard result.succeeded, !result.trimmed.isEmpty else { return nil }
+        let common = URL(fileURLWithPath: result.trimmed).resolvingSymlinksInPath()
+        let repo = common.lastPathComponent == ".git" ? common.deletingLastPathComponent() : common
+        return fileManager.fileExists(atPath: repo.path) ? repo.path : nil
     }
 
     func agentWorktreeRoots() -> [(harness: Harness, root: URL)] {

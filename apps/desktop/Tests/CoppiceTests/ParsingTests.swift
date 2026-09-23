@@ -259,4 +259,18 @@ final class ParsingTests: XCTestCase {
         XCTAssertFalse(ArtifactScanner.qualifies(name: "target", parent: base.path),
                        "target needs a Cargo.toml, not a package.json")
     }
+
+    func testMergedPullRequestOnlyCountsWhenItsHeadIsTheBranchTip() {
+        let worktree = Worktree(
+            path: "/tmp/wt", repoPath: "/tmp/repo", branch: "feature", head: "abc123",
+            harness: .manual, isMain: false, isPrunable: false, isLocked: false, isOrphan: false
+        )
+        func report(headOid: String?) -> WorktreeReport {
+            let pullRequest = PullRequest(number: 1, state: .merged, title: "", url: "", isDraft: false, headOid: headOid)
+            return WorktreeReport(worktree: worktree, verdict: .safe, pullRequest: pullRequest)
+        }
+        XCTAssertTrue(report(headOid: "abc123").mergedAtHead)
+        XCTAssertFalse(report(headOid: "def456").mergedAtHead, "commits after the merge must not count as merged")
+        XCTAssertFalse(report(headOid: nil).mergedAtHead)
+    }
 }

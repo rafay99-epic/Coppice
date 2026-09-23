@@ -99,6 +99,7 @@ final class AppModel: ObservableObject {
     private var hasStarted = false
     private var scanTask: Task<Void, Never>?
     private var measureTask: Task<Void, Never>?
+    private var rescanQueued = false
     private var pullRequestTask: Task<Void, Never>?
     private var lastPullRequestFetch: Date?
     private var pullRequestRepos: Set<String> = []
@@ -159,13 +160,6 @@ final class AppModel: ObservableObject {
         restartWatcher()
     }
 
-    func stop() {
-        watcher?.stop()
-        watcher = nil
-        scanTask?.cancel()
-        measureTask?.cancel()
-    }
-
     private func restartWatcher() {
         watcher?.stop()
         let scanner = self.scanner
@@ -186,13 +180,15 @@ final class AppModel: ObservableObject {
     }
 
     func rescan() {
+        if activity == .scanning { rescanQueued = true }
         guard !activity.isBusy else { return }
+        rescanQueued = false
         scanTask?.cancel()
         measureTask?.cancel()
         activity = .scanning
 
         let scanner = self.scanner
-        let merged = Set(reports.filter { $0.pullRequest?.state == .merged }.map(\.id))
+        let merged = Set(reports.filter(\.mergedAtHead).map(\.id))
         scanTask = Task { [weak self] in
             let (fresh, unreadable) = await Task.detached(priority: .utility) { () -> ([WorktreeReport], [String]) in
                 let files = FileManager.default
@@ -228,6 +224,10 @@ final class AppModel: ObservableObject {
             }
             self.lastScan = Date()
             self.activity = .idle
+            if self.rescanQueued {
+                self.rescan()
+                return
+            }
             Log.shared.write(
                 "scan: \(self.visibleReports.count) worktrees, "
                 + "\(self.hasWorkCount) with work, \(self.groups.count) repos"
@@ -245,7 +245,7 @@ final class AppModel: ObservableObject {
         guard canCheckPullRequests, settings.checkPullRequests else { return }
         pullRequestTask?.cancel()
 
-        let repoSet = Set(reports.map(\.worktree.repoPath))
+        let repoSet = Set(reports.filter { !$0.worktree.isOrphan }.map(\.worktree.repoPath))
         guard !repoSet.isEmpty else { return }
         let repos = Array(repoSet)
         isCheckingPullRequests = true
@@ -273,7 +273,7 @@ final class AppModel: ObservableObject {
 
     private func recheckMergedBranches() async {
         let targets = reports
-            .filter { $0.pullRequest?.state == .merged && Self.dependsOnMerge($0.verdict) }
+            .filter { $0.mergedAtHead && Self.dependsOnMerge($0.verdict) }
             .map(\.worktree)
         guard !targets.isEmpty else { return }
 
@@ -298,7 +298,7 @@ final class AppModel: ObservableObject {
 
     func allBlockers(for report: WorktreeReport) async -> [Blocker] {
         let scanner = self.scanner
-        let prMerged = report.pullRequest?.state == .merged
+        let prMerged = report.mergedAtHead
         return await Task.detached(priority: .userInitiated) {
             scanner.blockers(for: report.worktree, holders: ProcessProbe.currentHolders(), prMerged: prMerged)
         }.value
@@ -327,8 +327,18 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func interruptScan() -> Bool {
+        guard !activity.isMutating else { return false }
+        if activity == .scanning {
+            scanTask?.cancel()
+            rescanQueued = false
+            activity = .idle
+        }
+        return true
+    }
+
     func sweep(_ targets: [WorktreeReport]) async {
-        guard !targets.isEmpty, !activity.isBusy else { return }
+        guard !targets.isEmpty, interruptScan() else { return }
         banner = nil
         activity = .sweeping(
             Sweeper.Progress(completed: 0, total: targets.count, currentName: "", freedBytes: 0)
@@ -341,7 +351,10 @@ final class AppModel: ObservableObject {
                 scanner: scanner,
                 log: { Log.shared.write($0) },
                 onProgress: { progress in
-                    Task { @MainActor in self?.activity = .sweeping(progress) }
+                    Task { @MainActor in
+                        guard let self, case .sweeping = self.activity else { return }
+                        self.activity = .sweeping(progress)
+                    }
                 }
             )
         }.value
@@ -352,9 +365,10 @@ final class AppModel: ObservableObject {
         rescan()
     }
 
-    func prune() async {
+    func prune(only repository: String? = nil) async {
         let repos = Array(Set(prunableReports.map(\.worktree.repoPath)))
-        guard !repos.isEmpty, !activity.isBusy else { return }
+            .filter { repository == nil || $0 == repository }
+        guard !repos.isEmpty, interruptScan() else { return }
         banner = nil
         activity = .pruning(repositories: repos.count)
 
@@ -382,7 +396,7 @@ final class AppModel: ObservableObject {
     }
 
     func remove(_ report: WorktreeReport, deleteBranch: Bool) async {
-        guard !activity.isBusy else { return }
+        guard interruptScan() else { return }
         banner = nil
         activity = .removing(name: report.worktree.name)
 

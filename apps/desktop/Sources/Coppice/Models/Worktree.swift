@@ -54,8 +54,8 @@ enum Blocker: Equatable, Hashable, Sendable {
             return files.count == 1
                 ? "\(files[0]) is not in git"
                 : "\(files.count) local config files are not in git"
-        case .locked:
-            return "Locked"
+        case .locked(let reason):
+            return reason.isEmpty ? "Locked" : "Locked: \(reason)"
         case .gitOperationInProgress(let operation):
             return "\(operation) in progress"
         case .dirtySubmodule(let name):
@@ -71,26 +71,10 @@ enum Blocker: Equatable, Hashable, Sendable {
             return "The repository's own working copy is never removable."
         case .liveProcess:
             return "Close the session, editor or dev server using this directory."
-        case .uncommittedChanges:
-            return "Commit, stash or discard the changes."
-        case .untrackedFiles:
-            return "Commit the files, or delete them if they are not needed."
-        case .unpushedCommits:
-            return "Push the branch so the commits exist somewhere else."
-        case .aheadOfDefault:
-            return "Push the branch, or merge it into the default branch."
-        case .ignoredConfig:
-            return "These are gitignored, so git has no copy. Rescue them first."
-        case .locked(let reason):
-            return reason.isEmpty
-                ? "Run git worktree unlock to release it."
-                : "Locked: \(reason). Run git worktree unlock to release it."
-        case .gitOperationInProgress:
-            return "Finish or abort the operation, then rescan."
-        case .dirtySubmodule:
-            return "Commit or discard the changes inside the submodule."
         case .outsideScanRoots:
             return "Coppice only removes paths inside your configured roots."
+        default:
+            return ""
         }
     }
 
@@ -228,7 +212,10 @@ struct WorktreeReport: Identifiable, Hashable, Sendable {
     var measured: Bool
     var pullRequest: PullRequest?
 
-    var isLikelyDisposable: Bool { pullRequest?.isSettled == true }
+    var mergedAtHead: Bool {
+        guard let pullRequest, pullRequest.state == .merged, !worktree.head.isEmpty else { return false }
+        return pullRequest.headOid == worktree.head
+    }
 
     var id: String { worktree.path }
     var totalBytes: Int64 { artifactBytes + uniqueBytes }
