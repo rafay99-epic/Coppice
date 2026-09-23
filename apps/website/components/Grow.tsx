@@ -4,25 +4,22 @@ import { useEffect } from "react";
 
 export function Grow() {
   useEffect(() => {
-    if (CSS.supports("animation-timeline: view()")) return;
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    const targets = document.querySelectorAll<HTMLElement>("[data-grow]");
+    document.documentElement.dataset.motion = "ready";
+    const targets = document.querySelectorAll<HTMLElement>("[data-grow]:not([data-grow='in'])");
     const observer = new IntersectionObserver(
       (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          (entry.target as HTMLElement).dataset.grow = "in";
-          observer.unobserve(entry.target);
-        }
+        entries
+          .filter((entry) => entry.isIntersecting)
+          .forEach((entry, index) => {
+            const target = entry.target as HTMLElement;
+            target.style.setProperty("--stagger", `${Math.min(index, 4) * 70}ms`);
+            target.dataset.grow = "in";
+            observer.unobserve(target);
+          });
       },
-      { rootMargin: "0px 0px -15% 0px" },
+      { rootMargin: "0px 0px -12% 0px" },
     );
-
-    for (const target of targets) {
-      target.dataset.grow = "pending";
-      observer.observe(target);
-    }
+    targets.forEach((target) => observer.observe(target));
     return () => observer.disconnect();
   }, []);
 

@@ -57,7 +57,7 @@ function Hero() {
     <section id="top" className="mx-auto max-w-6xl px-4 pt-8 pb-12 sm:px-6 sm:pt-20 sm:pb-24">
       <div className="grid items-end gap-10 lg:grid-cols-[1.1fr_1fr]">
         <div className="min-w-0">
-          <h1 className="display intro text-[clamp(3rem,9vw,6.5rem)]">
+          <h1 className="display text-[clamp(3rem,9vw,6.5rem)]">
             Cut it back.
             <br />
             <em>It grows again.</em>

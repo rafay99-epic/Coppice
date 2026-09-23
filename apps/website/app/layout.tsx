@@ -6,7 +6,7 @@ import "./globals.css";
 const display = Fraunces({
   subsets: ["latin"],
   style: ["normal", "italic"],
-  axes: ["opsz", "SOFT"],
+  axes: ["opsz"],
   variable: "--font-fraunces",
   display: "swap",
 });
@@ -56,6 +56,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: "var d=document.documentElement;d.classList.add('js');setTimeout(function(){if(!d.dataset.motion)d.classList.remove('js')},4000)" }} />
+      </head>
       <body className="antialiased">
         {children}
         <Grow />

@@ -8,7 +8,7 @@
   --color-line: #242424;
   --color-label: #ffffff;
   --color-label-2: #a3a3a3;
-  --color-label-3: #6f6f6f;
+  --color-label-3: #838383;
 
   --font-display: var(--font-fraunces), Georgia, serif;
   --font-sans: var(--font-instrument), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
@@ -26,7 +26,6 @@ body {
   color: var(--color-label);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
   overflow-x: hidden;
 }
 
@@ -40,7 +39,6 @@ body {
   font-weight: 300;
   letter-spacing: -0.025em;
   line-height: 1.02;
-  font-variation-settings: "SOFT" 50;
 }
 
 .display em {
@@ -151,25 +149,7 @@ body {
     animation: rise 0.9s var(--ease-grow) var(--i, 0s) both;
   }
 
-  @supports (animation-timeline: view()) {
-    .sprout path {
-      animation: draw linear both;
-      animation-timeline: view();
-      animation-range: entry 20% cover 45%;
-    }
-
-    .sprout path.dead {
-      animation: wither linear both;
-      animation-timeline: view();
-      animation-range: entry 20% cover 60%;
-    }
-
-    .reveal {
-      animation: rise linear both;
-      animation-timeline: view();
-      animation-range: entry 0% entry 55%;
-    }
-
+  @supports (animation-timeline: scroll()) {
     .spine {
       transform-origin: top;
       animation: spine linear both;
@@ -177,30 +157,33 @@ body {
     }
   }
 
-  [data-grow="pending"].sprout path {
-    stroke-dashoffset: 1;
+  .js .reveal[data-grow] {
+    opacity: 0;
+    transform: translate3d(0, 20px, 0);
+    transition:
+      opacity 0.7s ease var(--stagger, 0s),
+      transform 0.9s var(--ease-grow) var(--stagger, 0s);
   }
 
-  [data-grow="in"].sprout path {
+  .js .reveal[data-grow="in"] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .js .sprout[data-grow] path {
+    stroke-dashoffset: 1;
     transition: stroke-dashoffset 1.4s var(--ease-grow) var(--d, 0s);
   }
 
-  [data-grow="in"].sprout path.dead {
+  .js .sprout[data-grow="in"] path {
+    stroke-dashoffset: 0;
+  }
+
+  .js .sprout[data-grow="in"] path.dead {
     opacity: 0.12;
     transition:
       stroke-dashoffset 1.4s var(--ease-grow) var(--d, 0s),
       opacity 0.9s ease 1.8s;
-  }
-
-  [data-grow="pending"].reveal {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-
-  [data-grow="in"].reveal {
-    transition:
-      opacity 0.8s ease,
-      transform 0.8s var(--ease-grow);
   }
 }
 
