@@ -9,7 +9,7 @@ DEST="/Applications/Coppice Dev.app"
 
 echo "Installing → $DEST"
 osascript -e 'tell application "Coppice Dev" to quit' 2>/dev/null || true
-pkill -f "$DEST/Contents/MacOS/Coppice" 2>/dev/null || true
+pkill -f "$DEST/Contents/MacOS/" 2>/dev/null || true
 sleep 1
 rm -rf "$DEST"
 ditto "$APP" "$DEST"
