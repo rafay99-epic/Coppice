@@ -1,0 +1,19 @@
+README.md
+  s_3e3dfec32bf217::t_ad41b31add0d62 43,45,47,49-51,53,63,65,85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9cded28800d64fbb249279474126766211c9ffb5",
+  "prompts": {},
+  "sessions": {
+    "s_3e3dfec32bf217": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fc78b36b-49ba-4f4d-b965-573ed26d3610",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
