@@ -1,18 +1,9 @@
 import SwiftUI
 
-/// Detail for the selected worktree, and the only place Remove exists.
-///
-/// Built from `Form` and `LabeledContent` so it inherits the inspector metrics
-/// the system already uses in Xcode and Finder's Get Info, rather than
-/// hand-rolled rows that drift from them.
 struct InspectorView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
     @State private var confirmingRemoval = false
-    @State private var deleteBranch = false
-    /// Set when the user opens the sheet from the override button rather than
-    /// the normal Remove, so the sheet knows to show what will be discarded.
-    @State private var forcing = false
 
     var body: some View {
         Group {
@@ -22,14 +13,14 @@ struct InspectorView: View {
                 ContentUnavailableView(
                     "No Selection",
                     systemImage: "sidebar.trailing",
-                    description: Text("Select a worktree to see why Coppice reached its verdict.")
+                    description: Text("Select a worktree to see what is in it.")
                 )
             }
         }
         .sheet(isPresented: $confirmingRemoval) {
             if let report = model.selectedReport {
-                RemoveSheet(report: report, deleteBranch: $deleteBranch, forcing: forcing) {
-                    Task { await model.remove(report, deleteBranch: deleteBranch, force: forcing) }
+                RemoveSheet(report: report) { deleteBranch in
+                    Task { await model.remove(report, deleteBranch: deleteBranch) }
                 }
             }
         }
@@ -47,7 +38,7 @@ struct InspectorView: View {
             Section("Size") {
                 if report.measured {
                     LabeledContent("Build artifacts") {
-                        Text(Format.bytes(report.artifactBytes)).foregroundStyle(.green).monospacedDigit()
+                        Text(Format.bytes(report.artifactBytes)).monospacedDigit().numeric(report.artifactBytes)
                     }
                     .help("Regenerable. A sweep frees this and an install command puts it back.")
 
@@ -98,10 +89,12 @@ struct InspectorView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(.black)
+        .animation(.smooth, value: report.verdict)
+        .animation(.smooth, value: report.measured)
     }
 
-    /// Pull request state for this branch, or a spinner while it is fetched.
-    /// Extracted so `content` stays readable rather than one long builder.
     @ViewBuilder
     private func pullRequestSection(_ report: WorktreeReport) -> some View {
         if let pullRequest = report.pullRequest {
@@ -153,17 +146,19 @@ struct InspectorView: View {
     @ViewBuilder
     private func statusExplanation(_ report: WorktreeReport) -> some View {
         switch report.verdict {
-        case .blocked(let blocker):
-            VStack(alignment: .leading, spacing: 6) {
+        case .blocked(let blocker) where blocker.severity == .absolute:
+            VStack(alignment: .leading, spacing: 4) {
                 Text(blocker.summary).font(.callout)
                 Text(blocker.remedy).font(.caption).foregroundStyle(.secondary)
-                if case .ignoredConfig(let files) = blocker {
-                    ForEach(files, id: \.self) { file in
-                        Label(file, systemImage: "doc.text.fill")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+
+        case .blocked(let blocker):
+            VStack(alignment: .leading, spacing: 4) {
+                Text(blocker.summary).font(.callout)
+                Text("Removing moves it to the Trash. Commits stay on the branch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .fixedSize(horizontal: false, vertical: true)
 
@@ -177,22 +172,20 @@ struct InspectorView: View {
             }
 
         case .safe:
-            Text("Clean, pushed, nothing running here, and no local-only config.")
+            Text("Clean, pushed, and nothing is running here.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
 
         case .prunable:
-            Text("The directory is already gone. Pruning clears the leftover git metadata and touches nothing on disk.")
+            Text("The folder is already gone. Pruning clears the leftover git metadata.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .orphan:
-            Text("The parent repository no longer exists, so nothing can reclaim this.")
+            Text("Its repository no longer exists.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -214,160 +207,93 @@ struct InspectorView: View {
                 Label("Prune Metadata", systemImage: "clock.arrow.circlepath")
             }
             .disabled(model.isWorking)
-        } else {
+        } else if report.verdict.canRemove {
             Button(role: .destructive) {
-                forcing = false
                 confirmingRemoval = true
             } label: {
-                Label("Remove Worktree…", systemImage: "trash")
+                Label("Move to Trash…", systemImage: "trash")
             }
-            .disabled(!report.verdict.canRemove || model.isWorking)
-
-            if let blocker = report.verdict.blocker {
-                overrideSection(report, blocker)
-            }
-        }
-    }
-
-    /// The escape hatch.
-    ///
-    /// Worktrees are scratch space, so refusing forever would make Coppice
-    /// useless on exactly the ones the user most wants gone. Overridable
-    /// blockers get a second, deliberately plainer button that states what is
-    /// destroyed; absolute ones say why no button exists.
-    @ViewBuilder
-    private func overrideSection(_ report: WorktreeReport, _ blocker: Blocker) -> some View {
-        if blocker.severity == .absolute {
-            Label(blocker.remedy, systemImage: "hand.raised.fill")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        } else {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(blocker.remedy)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if report.isLikelyDisposable {
-                    Label("Its pull request is closed, so this is likely safe to discard.", systemImage: "checkmark.circle")
-                        .font(.caption)
-                        .foregroundStyle(.green)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Button(role: .destructive) {
-                    forcing = true
-                    confirmingRemoval = true
-                } label: {
-                    Label("Remove Anyway…", systemImage: "exclamationmark.triangle")
-                }
-                .disabled(model.isWorking)
-
-                if let loss = blocker.lossIfForced {
-                    Text("Discards work: \(loss).")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            .disabled(model.isWorking)
         }
     }
 }
 
-/// Typed confirmation for the one irreversible action.
-///
-/// The name has to be entered by hand. That is what makes bulk removal
-/// impossible and forces the user to read what they actually picked.
 struct RemoveSheet: View {
     let report: WorktreeReport
-    @Binding var deleteBranch: Bool
-    /// Overriding a blocker. The sheet changes tone and lists what is destroyed.
-    var forcing = false
-    let onConfirm: () -> Void
+    let onConfirm: (Bool) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
-    @State private var typed = ""
+    @State private var deleteBranch = false
+    @State private var blockers: [Blocker]?
 
-    private var matches: Bool { typed == report.worktree.name }
+    private var notes: [String] { (blockers ?? []).compactMap(\.removalNote) }
+    private var ignoredFiles: [String] {
+        (blockers ?? []).flatMap { blocker -> [String] in
+            if case .ignoredConfig(let files) = blocker { return files }
+            return []
+        }
+    }
+    private var holdsCommits: Bool { (blockers ?? []).contains(where: \.holdsCommits) }
+    private var sizeText: String {
+        report.measured ? "\(Format.bytes(report.totalBytes)). " : ""
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: forcing ? "exclamationmark.triangle.fill" : "trash.circle.fill")
-                    .font(.system(size: 38))
-                    .foregroundStyle(forcing ? AnyShapeStyle(.orange) : AnyShapeStyle(.red))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(forcing
-                         ? "Discard work and remove “\(report.worktree.name)”?"
-                         : "Remove “\(report.worktree.name)”?")
-                        .font(.headline)
-                    Text(forcing
-                         ? "Coppice would normally refuse this. Removing it destroys work that exists nowhere else."
-                         : "The directory goes to the Trash, then git metadata is pruned. Anything gitignored inside has no copy in git.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Move \(report.worktree.name) to the Trash?")
+                    .font(.headline)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                Text("\(sizeText)You can restore it from the Trash.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
             .padding(20)
 
             Divider()
 
             Form {
-                if forcing, let loss = report.verdict.blocker?.lossIfForced {
-                    Section {
-                        Label(loss, systemImage: "exclamationmark.octagon.fill")
-                            .foregroundStyle(.red)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if case .ignoredConfig(let files) = report.verdict.blocker {
-                            ForEach(files, id: \.self) { file in
-                                Text(file).font(.caption).monospaced().foregroundStyle(.secondary)
+                if blockers == nil {
+                    LabeledContent("Checking what is inside") { ProgressView().controlSize(.small) }
+                } else if !notes.isEmpty || !ignoredFiles.isEmpty {
+                    Section("Goes with it") {
+                        ForEach(notes, id: \.self) { note in
+                            Text(note).fixedSize(horizontal: false, vertical: true)
+                        }
+                        ForEach(ignoredFiles, id: \.self) { file in
+                            LabeledContent {
+                                Text(settings.rescueIgnoredConfig ? "copy saved to Coppice Rescue" : "kept in the Trash")
+                                    .foregroundStyle(.secondary)
+                            } label: {
+                                Text(file).monospaced()
                             }
                         }
-                    } header: {
-                        Text("What you are discarding")
                     }
                 }
 
-                if let pullRequest = report.pullRequest {
-                    LabeledContent("Pull request") {
-                        Label(pullRequest.summary, systemImage: pullRequest.symbol)
-                            .foregroundStyle(pullRequest.state == .open ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                Section {
+                    if let pullRequest = report.pullRequest {
+                        LabeledContent("Pull request") {
+                            Label(pullRequest.summary, systemImage: pullRequest.symbol)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    LabeledContent("Branch", value: report.worktree.displayBranch)
+                    Toggle("Delete branch too", isOn: $deleteBranch)
+                        .disabled(report.worktree.branch == nil)
+                    if deleteBranch, holdsCommits {
+                        Text("Its commits are only on this branch. Git keeps the branch unless it is merged.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-
-                LabeledContent("Branch", value: report.worktree.displayBranch)
-                LabeledContent("Repository", value: report.worktree.repoName)
-                LabeledContent("Size", value: report.measured ? Format.bytes(report.totalBytes) : "Not measured")
-
-                Toggle("Also delete the branch", isOn: $deleteBranch)
-                    .disabled(report.worktree.branch == nil)
-                    .help("Uses git branch -d, so git still refuses if the branch is unmerged.")
-
-                if settings.rescueIgnoredConfig {
-                    Label(
-                        "Gitignored config is copied to \(settings.rescueDirectory.lastPathComponent) first.",
-                        systemImage: "shield.lefthalf.filled"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-
-                TextField("Type “\(report.worktree.name)” to confirm", text: $typed)
-                    .textFieldStyle(.roundedBorder)
             }
-            // Scrolls, and is the only part of the sheet that does. The header
-            // states what is about to happen and the footer holds the buttons,
-            // so both must stay pinned: a confirmation whose Cancel button can
-            // be scrolled out of reach is worse than no confirmation at all.
-            //
-            // The middle grew past the window once the forced-removal section
-            // and pull request row were added, which is what made an earlier
-            // `.scrollDisabled(true)` here a real bug rather than a tidy-up.
             .formStyle(.grouped)
-            .frame(maxHeight: 420)
+            .frame(maxHeight: 360)
 
             Divider()
 
@@ -375,17 +301,18 @@ struct RemoveSheet: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button(forcing ? "Discard and Remove" : "Remove") {
-                    onConfirm()
+                Button("Move to Trash") {
+                    onConfirm(deleteBranch)
                     dismiss()
                 }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-                .tint(forcing ? .orange : .red)
-                .disabled(!matches)
+                .buttonStyle(.mono)
+                .disabled(blockers == nil)
             }
             .padding(20)
         }
-        .frame(width: 440)
+        .frame(width: 420)
+        .task {
+            blockers = await model.allBlockers(for: report)
+        }
     }
 }

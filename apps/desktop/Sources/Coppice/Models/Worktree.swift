@@ -1,26 +1,16 @@
 import Foundation
 
-/// A git worktree found on this machine, plus everything Coppice needs to decide
-/// whether touching it is safe. Value type with no I/O so the verdict logic can
-/// be tested against fixtures without a real filesystem.
 struct Worktree: Identifiable, Hashable, Sendable {
-    /// Absolute, symlink-resolved path. Also the identity: one worktree per path.
     let path: String
-    /// The repository this worktree belongs to.
     let repoPath: String
-    /// Short branch name, or nil when HEAD is detached.
     let branch: String?
     let head: String
-    /// Which agent created it, inferred from where it lives.
     let harness: Harness
-    /// True for the repository's own working copy, which is never removable.
     let isMain: Bool
-    /// Git says the directory is gone and only stale metadata remains.
     let isPrunable: Bool
-    /// `git worktree lock` was used. Someone said hands off.
     let isLocked: Bool
-    /// The parent repository no longer exists, so no git command can reach this.
     let isOrphan: Bool
+    var lockReason: String = ""
 
     var id: String { path }
     var name: String { (path as NSString).lastPathComponent }
@@ -28,22 +18,11 @@ struct Worktree: Identifiable, Hashable, Sendable {
     var displayBranch: String { branch ?? "detached at \(head.prefix(7))" }
 }
 
-/// How firmly a blocker refuses.
-///
-/// Worktrees are scratch space. Most carry uncommitted edits that were never
-/// meant to survive, so a block the user can never clear turns the app into an
-/// obstacle: the worktrees you most want gone are exactly the ones it refuses
-/// to touch. Overridable blockers state what would be lost and let the user
-/// decide; absolute ones would corrupt something no confirmation can undo.
 enum Severity: Equatable, Hashable, Sendable {
-    /// Never removable, however hard the user insists.
     case absolute
-    /// Removable after an explicit, informed confirmation.
     case overridable
 }
 
-/// A reason removal is refused. Every case names the fix, because a block the
-/// user cannot clear is just a dead end.
 enum Blocker: Equatable, Hashable, Sendable {
     case mainWorktree
     case liveProcess(command: String, pid: Int32)
@@ -57,7 +36,6 @@ enum Blocker: Equatable, Hashable, Sendable {
     case dirtySubmodule(name: String)
     case outsideScanRoots
 
-    /// One line, shown on the row.
     var summary: String {
         switch self {
         case .mainWorktree:
@@ -74,8 +52,8 @@ enum Blocker: Equatable, Hashable, Sendable {
             return "\(count) commit\(count == 1 ? "" : "s") not on the default branch"
         case .ignoredConfig(let files):
             return files.count == 1
-                ? "\(files[0]) would be destroyed"
-                : "\(files.count) ignored config files would be destroyed"
+                ? "\(files[0]) is not in git"
+                : "\(files.count) local config files are not in git"
         case .locked:
             return "Locked"
         case .gitOperationInProgress(let operation):
@@ -87,7 +65,6 @@ enum Blocker: Equatable, Hashable, Sendable {
         }
     }
 
-    /// What the user does to clear it.
     var remedy: String {
         switch self {
         case .mainWorktree:
@@ -117,13 +94,6 @@ enum Blocker: Equatable, Hashable, Sendable {
         }
     }
 
-    /// Whether the user may override this.
-    ///
-    /// The three absolutes are not stubbornness. Removing the main worktree
-    /// breaks the repository, deleting a directory out from under a running
-    /// process corrupts whatever it is mid-write, and the roots check is the
-    /// boundary that stops a symlink pointing Coppice somewhere it should not
-    /// reach. Everything else is the user's own work, and theirs to discard.
     var severity: Severity {
         switch self {
         case .mainWorktree, .liveProcess, .outsideScanRoots: return .absolute
@@ -131,40 +101,41 @@ enum Blocker: Equatable, Hashable, Sendable {
         }
     }
 
-    /// Exactly what is destroyed if the user overrides. Shown verbatim in the
-    /// confirmation, so nobody discards work without reading what it was.
-    var lossIfForced: String? {
+    var removalNote: String? {
+        func plural(_ count: Int, _ noun: String) -> String { "\(count) \(noun)\(count == 1 ? "" : "s")" }
         switch self {
         case .uncommittedChanges(let count):
-            return "\(count) uncommitted change\(count == 1 ? "" : "s") will be lost"
+            return "\(plural(count, "uncommitted change")), kept in the Trash"
         case .untrackedFiles(let count):
-            return "\(count) untracked file\(count == 1 ? "" : "s") will be lost"
+            return "\(plural(count, "untracked file")), kept in the Trash"
         case .unpushedCommits(let count):
-            return "\(count) commit\(count == 1 ? "" : "s") that exist only here will be lost"
+            return "\(plural(count, "unpushed commit")), kept on the branch"
         case .aheadOfDefault(let count):
-            return "\(count) commit\(count == 1 ? "" : "s") not on the default branch will be lost"
-        case .ignoredConfig(let files):
-            return "\(files.count) local config file\(files.count == 1 ? "" : "s") will be lost"
+            return "\(plural(count, "commit")) not on the default branch, kept on the branch"
         case .dirtySubmodule(let name):
-            return "changes inside submodule \(name) will be lost"
+            return "Changes in submodule \(name), kept in the Trash"
         case .gitOperationInProgress(let operation):
-            return "the in-progress \(operation.lowercased()) will be abandoned"
+            return "The \(operation.lowercased()) in progress is abandoned"
         case .locked:
-            return "the worktree lock will be released first"
-        case .mainWorktree, .liveProcess, .outsideScanRoots:
+            return "The worktree lock is released"
+        case .ignoredConfig, .mainWorktree, .liveProcess, .outsideScanRoots:
             return nil
         }
     }
 
-    /// Sweep only ever respects the live-process rule. Build artifacts are not
-    /// source, so uncommitted work in the same worktree is irrelevant to them.
+    var holdsCommits: Bool {
+        switch self {
+        case .unpushedCommits, .aheadOfDefault: return true
+        default: return false
+        }
+    }
+
     var blocksSweep: Bool {
         if case .liveProcess = self { return true }
         return false
     }
 }
 
-/// Worth surfacing, not worth refusing. Nothing here can lose work.
 enum Caution: Equatable, Hashable, Sendable {
     case recentSession(hoursAgo: Int)
     case branchNotMerged
@@ -185,7 +156,6 @@ enum Caution: Equatable, Hashable, Sendable {
     }
 }
 
-/// The single answer Coppice gives for a worktree. Computed, never guessed.
 enum Verdict: Equatable, Hashable, Sendable {
     case safe
     case caution([Caution])
@@ -193,28 +163,33 @@ enum Verdict: Equatable, Hashable, Sendable {
     case prunable
     case orphan
 
+    enum Status: Equatable {
+        case ready
+        case hasWork
+        case inUse
+        case protected
+        case stale
+    }
+
+    var status: Status {
+        switch self {
+        case .safe, .caution, .orphan: return .ready
+        case .prunable: return .stale
+        case .blocked(.liveProcess): return .inUse
+        case .blocked(let blocker): return blocker.severity == .absolute ? .protected : .hasWork
+        }
+    }
+
     var canRemove: Bool {
-        switch self {
-        case .safe, .caution, .prunable, .orphan: return true
-        case .blocked: return false
-        }
+        if case .blocked(let blocker) = self { return blocker.severity == .overridable }
+        return true
     }
 
-    /// Whether removal is possible at all, given an explicit override.
-    var canForceRemove: Bool {
-        switch self {
-        case .blocked(let blocker): return blocker.severity == .overridable
-        default: return true
-        }
-    }
-
-    /// The blocker standing in the way, if any.
     var blocker: Blocker? {
         if case .blocked(let blocker) = self { return blocker }
         return nil
     }
 
-    /// Sweeping artifacts is allowed unless something is actively running here.
     var canSweep: Bool {
         switch self {
         case .blocked(let blocker): return !blocker.blocksSweep
@@ -233,36 +208,26 @@ enum Verdict: Equatable, Hashable, Sendable {
         }
     }
 
-    /// Sort weight so the list leads with what the user can act on.
     var order: Int {
-        switch self {
-        case .safe: return 0
-        case .caution: return 1
-        case .prunable: return 2
-        case .orphan: return 3
-        case .blocked: return 4
+        switch status {
+        case .ready: return 0
+        case .hasWork: return 1
+        case .stale: return 2
+        case .inUse: return 3
+        case .protected: return 4
         }
     }
 }
 
-/// A worktree joined with its verdict and measured size. This is what the UI binds to.
 struct WorktreeReport: Identifiable, Hashable, Sendable {
     let worktree: Worktree
     var verdict: Verdict
-    /// Bytes in regenerable build artifacts. Recovered by reinstalling.
     var artifactBytes: Int64
-    /// Bytes in everything else. Only recoverable from the Trash.
     var uniqueBytes: Int64
-    /// Artifact directories found inside, for the sweep.
     var artifacts: [Artifact]
-    /// Set once a size walk has finished, so the UI can show a dash until then.
     var measured: Bool
-    /// The pull request for this branch, once looked up. Nil means unknown
-    /// rather than absent — the lookup is lazy and may not have run yet.
     var pullRequest: PullRequest?
 
-    /// A merged or closed PR means the branch is finished, so whatever is left
-    /// uncommitted in the worktree is almost certainly debris.
     var isLikelyDisposable: Bool { pullRequest?.isSettled == true }
 
     var id: String { worktree.path }
@@ -287,7 +252,6 @@ struct WorktreeReport: Identifiable, Hashable, Sendable {
     }
 }
 
-/// A regenerable build-artifact directory inside a worktree.
 struct Artifact: Identifiable, Hashable, Sendable {
     let path: String
     let kind: String

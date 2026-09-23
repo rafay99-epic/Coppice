@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// The panel that drops out of the status item.
-///
-/// Answers one question — is there anything worth reclaiming — and offers the
-/// reversible action. Everything destructive lives in the window, behind a
-/// selection and a typed confirmation.
 struct MenuBarView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
@@ -39,24 +34,26 @@ struct MenuBarView: View {
                 .padding(12)
         }
         .frame(width: 300)
+        .background(.black)
+        .animation(.smooth, value: model.banner)
+        .animation(.smooth, value: model.activity.isMutating)
     }
-
-    // MARK: Header
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Image(systemName: "scissors")
                     .font(.system(size: 17))
-                    .foregroundStyle(model.reclaimableBytes > 0 ? .green : .secondary)
+                    .foregroundStyle(model.reclaimableBytes > 0 ? .primary : .secondary)
+                    .symbolEffect(.bounce, value: model.lastScan)
                     .frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(headline).font(.headline)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                    Text(headline).font(.headline).numeric(headline)
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary).numeric(subtitle)
                 }
                 Spacer()
             }
-            if model.activity.isBusy {
+            if model.activity.isMutating {
                 ActivityBar(activity: model.activity)
             }
         }
@@ -73,8 +70,6 @@ struct MenuBarView: View {
         let repos = model.groups.count
         return "\(model.visibleReports.count) worktrees in \(repos) repo\(repos == 1 ? "" : "s")"
     }
-
-    // MARK: Body
 
     private var emptyState: some View {
         Text(model.isScanning
@@ -93,14 +88,14 @@ struct MenuBarView: View {
                 detail: "\(model.sweepCandidates.count) worktrees",
                 value: Format.compactBytes(model.reclaimableBytes),
                 symbol: "scissors",
-                tint: .green
+                tint: .primary
             )
             row(
-                title: "Protected",
-                detail: "Coppice will not remove these",
-                value: "\(model.protectedCount)",
-                symbol: "lock.fill",
-                tint: .red
+                title: "Has work",
+                detail: "Uncommitted or unpushed changes",
+                value: "\(model.hasWorkCount)",
+                symbol: "pencil.circle.fill",
+                tint: .secondary
             )
             if !model.prunableReports.isEmpty {
                 row(
@@ -131,7 +126,7 @@ struct MenuBarView: View {
                 Text(detail).font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
-            Text(value).font(.callout).monospacedDigit().foregroundStyle(.secondary)
+            Text(value).font(.callout).monospacedDigit().foregroundStyle(.secondary).numeric(value)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 5)
@@ -139,7 +134,7 @@ struct MenuBarView: View {
 
     private func updateCallout(_ release: Updater.Release) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "arrow.down.circle.fill").foregroundStyle(.blue)
+            Image(systemName: "arrow.down.circle.fill").foregroundStyle(.primary)
             Text("Version \(release.version) available").font(.callout)
             Spacer()
             Button("Update") { Task { await updater.installUpdate() } }
@@ -148,10 +143,8 @@ struct MenuBarView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.blue.opacity(0.12))
+        .background(.white.opacity(0.08))
     }
-
-    // MARK: Footer
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -161,7 +154,7 @@ struct MenuBarView: View {
                 } label: {
                     Label("Sweep", systemImage: "scissors")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.mono)
                 .disabled(model.sweepCandidates.isEmpty || model.isWorking)
 
                 Button("Open Coppice") { openMainWindow(openWindow) }

@@ -1,8 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// Standard macOS settings: a tabbed window of grouped forms, sized to its
-/// content, using system controls throughout.
 struct SettingsView: View {
     var body: some View {
         TabView {

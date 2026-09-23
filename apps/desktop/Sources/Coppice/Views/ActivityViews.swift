@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// Live progress for whatever is running.
-///
-/// Determinate wherever a count exists, because "Sweeping 4 of 17 · t3code-a1b2"
-/// tells the user how long is left and that nothing has hung. An indeterminate
-/// spinner is used only where the work really is one indivisible step.
 struct ActivityBar: View {
     let activity: Activity
 
@@ -18,7 +13,7 @@ struct ActivityBar: View {
                     if let freed = activity.freedSoFar {
                         Text("\(Format.bytes(freed)) freed")
                             .font(.caption)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(.primary)
                             .monospacedDigit()
                             .contentTransition(.numericText())
                     }
@@ -45,24 +40,13 @@ struct ActivityBar: View {
     }
 }
 
-/// The result of the last operation: what happened, and what did not.
-///
-/// Failures are never swallowed into a cheerful "Done". A partial sweep that hit
-/// three permission errors says so, and lists them, because the user needs to
-/// know which paths still hold space.
 struct BannerView: View {
     let banner: Banner
     let onDismiss: () -> Void
 
     @State private var showingDetails = false
 
-    private var tint: Color {
-        switch banner.kind {
-        case .success: return .green
-        case .warning: return .orange
-        case .failure: return .red
-        }
-    }
+    private var tint: Color { .white }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -101,9 +85,6 @@ struct BannerView: View {
             }
 
             if showingDetails {
-                // A sweep over fifty worktrees can fail on plenty of them, so
-                // this list has no useful upper bound. Cap the height and let it
-                // scroll rather than pushing the rest of the window off screen.
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(banner.details) { item in
@@ -124,7 +105,7 @@ struct BannerView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.10))
+        .background(tint.opacity(0.06))
         .overlay(alignment: .leading) {
             Rectangle().fill(tint).frame(width: 3)
         }

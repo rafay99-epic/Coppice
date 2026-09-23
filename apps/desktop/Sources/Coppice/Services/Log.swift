@@ -1,12 +1,6 @@
 import Foundation
 import os
 
-/// Append-only record of everything Coppice deleted.
-///
-/// A cleaner without an audit trail is a cleaner you cannot trust after the
-/// fact. Every removal writes the path, the byte count, the verdict at the
-/// moment of deletion and the method used, so "what happened to that worktree"
-/// has an answer that does not depend on anyone's memory.
 final class Log: @unchecked Sendable {
     static let shared = Log()
 
@@ -16,9 +10,6 @@ final class Log: @unchecked Sendable {
     private let maxBytes: Int64 = 2 * 1024 * 1024
 
     private init() {
-        // Per channel, not per app. Stable, Nightly and Dev install side by side
-        // and must not share state: a shared directory means Nightly's log
-        // overwrites Stable's, and uninstalling one wipes the other's history.
         let support = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appending(path: Channel.current.displayName)
@@ -45,7 +36,6 @@ final class Log: @unchecked Sendable {
         }
     }
 
-    /// Keeps one generation. The log is a record, not an archive.
     private func rotateIfNeeded() {
         guard let size = try? FileManager.default
             .attributesOfItem(atPath: fileURL.path)[.size] as? Int64,

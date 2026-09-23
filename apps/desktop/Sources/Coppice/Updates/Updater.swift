@@ -1,11 +1,6 @@
 import Foundation
 import AppKit
 
-/// Checks GitHub Releases, downloads the channel's DMG, and swaps the installed
-/// app in place.
-///
-/// Stable tracks full releases, Nightly tracks pre-releases, Dev has no feed at
-/// all. The repository is public, so no token and no auth path.
 @MainActor
 final class Updater: ObservableObject {
     enum Status: Equatable {
@@ -57,12 +52,6 @@ final class Updater: ObservableObject {
         }
     }
 
-    /// Checks at launch and every six hours. Dev never checks, because it
-    /// publishes nothing to check against.
-    ///
-    /// The toggle is read when the timer fires rather than subscribed to, so
-    /// turning it off takes effect on the next tick with no observation
-    /// machinery to keep in sync. One timer for the life of the app.
     func startAutomaticChecks(settings: AppSettings) {
         guard Channel.current.updatesEnabled, timer == nil else { return }
         self.settings = settings
@@ -76,7 +65,6 @@ final class Updater: ObservableObject {
                 await self.checkNow(silent: true)
             }
         }
-        // Keep firing while a menu or resize tracking loop is running.
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
@@ -97,8 +85,6 @@ final class Updater: ObservableObject {
         }
     }
 
-    /// The newest release for this channel, or nil when the running build is
-    /// already current.
     private func fetchLatest() async throws -> Release? {
         guard let assetName = Channel.current.assetName,
               let url = URL(string: "https://api.github.com/repos/\(Self.repository)/releases?per_page=20")
@@ -136,8 +122,6 @@ final class Updater: ObservableObject {
         return nil
     }
 
-    /// Versions are `0.<commit count>`, so a numeric component compare is exact.
-    /// A missing or unparseable component sorts as zero rather than throwing.
     nonisolated static func isNewer(_ candidate: String, than current: String) -> Bool {
         func components(_ value: String) -> [Int] {
             value.split(separator: "-").first.map(String.init)?
@@ -153,7 +137,6 @@ final class Updater: ObservableObject {
         return false
     }
 
-    /// Downloads the DMG, mounts it, replaces the running bundle, and relaunches.
     func installUpdate() async {
         guard case .available(let release) = status else { return }
         status = .downloading(0)
@@ -177,9 +160,6 @@ final class Updater: ObservableObject {
         return destination
     }
 
-    /// Mounts the image, copies the bundle over the running one, unmounts.
-    /// `ditto` preserves the code signature, which `cp` does not, and the
-    /// signature is what keeps the user's permission grants across updates.
     private func install(dmg: URL) throws {
         let mountPoint = FileManager.default.temporaryDirectory
             .appending(path: "coppice-mount-\(UUID().uuidString)")
@@ -204,8 +184,6 @@ final class Updater: ObservableObject {
             ])
         }
 
-        // Replace whatever bundle is actually running, so an app launched from a
-        // non-standard location still updates itself in place.
         let installPath = Bundle.main.bundlePath
         let backup = installPath + ".old"
         try? FileManager.default.removeItem(atPath: backup)
@@ -214,7 +192,6 @@ final class Updater: ObservableObject {
         }
         let copy = Shell.run("/usr/bin/ditto", [source.path, installPath], timeout: 180)
         guard copy.succeeded else {
-            // Put the working app back rather than leaving the user with nothing.
             try? FileManager.default.moveItem(atPath: backup, toPath: installPath)
             throw NSError(domain: "Coppice.Updater", code: 4, userInfo: [
                 NSLocalizedDescriptionKey: "Could not install the new version.",
@@ -232,8 +209,6 @@ final class Updater: ObservableObject {
         }
     }
 }
-
-// MARK: - GitHub payloads
 
 private struct GitHubRelease: Decodable {
     let tagName: String

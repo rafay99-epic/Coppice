@@ -1,12 +1,6 @@
 import XCTest
 @testable import Coppice
 
-/// Builds a real repository with real worktrees in a temp directory and asserts
-/// the verdict for each state.
-///
-/// These run against actual git rather than a mock, because the whole safety
-/// model is a claim about what git reports. A mock would only prove the mock
-/// agrees with itself.
 final class VerdictTests: XCTestCase {
     private var root: URL!
     private var remote: URL!
@@ -46,8 +40,6 @@ final class VerdictTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    // MARK: Helpers
-
     @discardableResult
     private func run(_ arguments: [String], in directory: String) -> Shell.Result {
         Shell.run(Git.executable, arguments, cwd: directory)
@@ -68,7 +60,6 @@ final class VerdictTests: XCTestCase {
         try? contents.write(to: url, atomically: true, encoding: .utf8)
     }
 
-    /// Creates a linked worktree on a new branch and returns it.
     private func makeWorktree(_ name: String, push: Bool = true) throws -> Worktree {
         let path = root.appending(path: "trees/\(name)")
         git(["worktree", "add", "-b", name, path.path, "main"])
@@ -83,9 +74,6 @@ final class VerdictTests: XCTestCase {
         scanner.verdict(for: worktree, holders: holders)
     }
 
-    /// A fixture worktree is seconds old, so the `veryNew` caution legitimately
-    /// fires. Cautions never prevent anything, so "nothing is blocking this"
-    /// is the assertion these tests actually want.
     private func assertRemovable(
         _ worktree: Worktree,
         _ message: String = "",
@@ -98,8 +86,6 @@ final class VerdictTests: XCTestCase {
         }
         XCTAssertTrue(result.canRemove, message, file: file, line: line)
     }
-
-    // MARK: Tests
 
     func testCleanPushedWorktreeIsRemovable() throws {
         let worktree = try makeWorktree("clean")
@@ -139,8 +125,6 @@ final class VerdictTests: XCTestCase {
         }
     }
 
-    /// The rule nobody else implements. Git reports this worktree as completely
-    /// clean, so every other check passes and the file would be destroyed.
     func testGitignoredConfigBlocksRemovalEvenWhenGitSaysClean() throws {
         let worktree = try makeWorktree("secrets")
         write(".env.local", "API_KEY=live", in: URL(fileURLWithPath: worktree.path))
@@ -153,7 +137,6 @@ final class VerdictTests: XCTestCase {
         XCTAssertEqual(files, [".env.local"])
     }
 
-    /// A committed template is not a secret and must not block.
     func testTrackedEnvExampleDoesNotBlock() throws {
         write(".env.example", "API_KEY=", in: repo)
         git(["add", "."])
@@ -176,12 +159,12 @@ final class VerdictTests: XCTestCase {
         XCTAssertFalse(result.canSweep, "a running process is the one thing that stops a sweep")
     }
 
-    /// A dirty worktree still sweeps: node_modules is not source.
     func testDirtyWorktreeStillSweeps() throws {
         let worktree = try makeWorktree("dirty-but-sweepable")
         write("README.md", "changed", in: URL(fileURLWithPath: worktree.path))
         XCTAssertTrue(verdict(worktree).canSweep)
-        XCTAssertFalse(verdict(worktree).canRemove)
+        XCTAssertEqual(verdict(worktree).status, .hasWork)
+        XCTAssertTrue(verdict(worktree).canRemove, "has work, so it goes to the Trash rather than being refused")
     }
 
     func testLockedWorktreeIsBlocked() throws {
@@ -228,8 +211,6 @@ final class VerdictTests: XCTestCase {
         }
     }
 
-    // MARK: Sweep behaviour
-
     func testSweepRemovesArtifactsAndKeepsSource() throws {
         let worktree = try makeWorktree("with-artifacts")
         let worktreeURL = URL(fileURLWithPath: worktree.path)
@@ -255,17 +236,18 @@ final class VerdictTests: XCTestCase {
         )
     }
 
-    /// The window between deciding and acting. A background app scans on a timer,
-    /// so this is the case that actually happens rather than a theoretical one.
     func testRemovalIsRefusedWhenStateChangedAfterTheScan() throws {
         let worktree = try makeWorktree("raced")
 
-        // Verdict at scan time: safe.
         let report = WorktreeReport(worktree: worktree, verdict: .safe)
         XCTAssertTrue(report.verdict.canRemove)
 
-        // The world moves: someone starts editing.
-        write("urgent.md", "in progress", in: URL(fileURLWithPath: worktree.path))
+        let agent = Process()
+        agent.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        agent.arguments = ["30"]
+        agent.currentDirectoryURL = URL(fileURLWithPath: worktree.path)
+        try agent.run()
+        defer { agent.terminate() }
 
         let outcome = Sweeper.remove(
             report: report,
@@ -286,25 +268,25 @@ final class VerdictTests: XCTestCase {
         let worktree = try makeWorktree("rescue-me")
         write(".env.local", "TOKEN=abc123", in: URL(fileURLWithPath: worktree.path))
 
-        // Rule 7 blocks this, which is correct. Confirm the rescue copies the
-        // file out when the caller supplies a rescue directory anyway.
         let rescue = root.appending(path: "rescued")
         let files = scanner.ignoredConfigFiles(in: worktree.path)
         XCTAssertEqual(files, [".env.local"])
 
-        _ = Sweeper.remove(
-            report: WorktreeReport(worktree: worktree, verdict: .safe),
+        Sweeper.rescueIgnoredConfig(
+            worktree: worktree,
             scanner: scanner,
-            deleteBranch: false,
-            rescueDirectory: rescue
+            into: rescue,
+            fileManager: .default,
+            log: { _ in }
         )
-        XCTAssertTrue(
-            FileManager.default.fileExists(atPath: worktree.path),
-            "ignored config blocks removal outright"
+        let saved = try FileManager.default.contentsOfDirectory(
+            at: rescue.appending(path: worktree.repoName),
+            includingPropertiesForKeys: nil
         )
+        XCTAssertEqual(saved.count, 1)
+        let copy = try String(contentsOf: saved[0].appending(path: ".env.local"), encoding: .utf8)
+        XCTAssertEqual(copy, "TOKEN=abc123")
     }
-
-    // MARK: Inventory
 
     func testInventoryFindsWorktreesAcrossTheRepository() throws {
         _ = try makeWorktree("one")
@@ -314,6 +296,43 @@ final class VerdictTests: XCTestCase {
         let names = Set(all.map(\.name))
         XCTAssertTrue(names.contains("one"))
         XCTAssertTrue(names.contains("two"))
-        XCTAssertTrue(all.contains { $0.isMain }, "the main worktree is listed so it can be shown as protected")
+        XCTAssertFalse(all.contains { $0.isMain }, "a repository's own checkout can never be acted on, so it is not listed")
+    }
+
+    func testMergedPullRequestClearsCommitsMissingFromDefault() throws {
+        let worktree = try makeWorktree("squashed", push: false)
+        write("feature.md", "work", in: URL(fileURLWithPath: worktree.path))
+        Git.run(["add", "."], in: worktree.path)
+        Git.run(["commit", "-m", "feature"], in: worktree.path)
+
+        guard case .blocked(.aheadOfDefault) = verdict(worktree) else {
+            return XCTFail("expected aheadOfDefault, got \(verdict(worktree))")
+        }
+        let merged = scanner.verdict(for: worktree, holders: [], prMerged: true)
+        XCTAssertTrue(merged.canRemove, "got \(merged)")
+    }
+
+    func testBlockersListsEverythingAForcedRemovalDestroys() throws {
+        let worktree = try makeWorktree("messy")
+        let url = URL(fileURLWithPath: worktree.path)
+        write("README.md", "edited", in: url)
+        write("scratch.md", "new", in: url)
+        write(".env.local", "TOKEN=abc", in: url)
+
+        let found = scanner.blockers(for: worktree, holders: [])
+        XCTAssertTrue(found.contains(.uncommittedChanges(count: 1)), "\(found)")
+        XCTAssertTrue(found.contains(.untrackedFiles(count: 1)), "\(found)")
+        XCTAssertTrue(found.contains(.ignoredConfig(files: [".env.local"])), "\(found)")
+    }
+
+    func testSweepLeavesCommittedBuildOutputAlone() throws {
+        let worktree = try makeWorktree("committed-dist")
+        let url = URL(fileURLWithPath: worktree.path)
+        write("package.json", "{}", in: url)
+        write("dist/index.js", "module.exports = 1", in: url)
+        Git.run(["add", "."], in: worktree.path)
+        Git.run(["commit", "-m", "ship dist"], in: worktree.path)
+
+        XCTAssertTrue(ArtifactScanner.scan(worktree: worktree.path).isEmpty)
     }
 }
