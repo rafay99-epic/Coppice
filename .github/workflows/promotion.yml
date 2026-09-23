@@ -33,9 +33,9 @@ jobs:
       - name: Collect the changelog
         id: changelog
         run: |
-          git fetch origin nightly:nightly
-          if git diff --quiet main nightly; then
-            echo "::notice::main already matches nightly — nothing to promote."
+          git fetch origin refs/heads/nightly:refs/remotes/origin/nightly
+          if git diff --quiet main origin/nightly; then
+            echo "::notice::main already matches nightly. Nothing to promote."
             echo "empty=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -43,7 +43,7 @@ jobs:
           {
             echo "## What changed"
             echo
-            git log --no-merges --pretty="- %s" main..nightly
+            git log --no-merges --pretty="- %s" main..origin/nightly
           } > /tmp/notes.md
           echo "--- promotion notes ---"
           cat /tmp/notes.md
@@ -53,7 +53,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git merge --squash nightly
+          git merge --squash origin/nightly
           if git diff --cached --quiet; then
             echo "::error::squash staged nothing, so there is nothing to promote"
             exit 1
@@ -62,7 +62,7 @@ jobs:
           git push origin main
 
           gh workflow run ci.yml --ref main
-          echo "::notice::Promoted nightly → main and started the release build."
+          echo "::notice::Promoted nightly to main and started the release build."
 
       - name: Dry run summary
         if: steps.changelog.outputs.empty == 'false' && inputs.dry_run == true
