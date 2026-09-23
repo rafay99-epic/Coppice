@@ -44,14 +44,16 @@ struct MainView: View {
 
     @State private var scope: Scope = .all
     @State private var showInspector = true
+    @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var search = ""
     @AppStorage("dismissedDiskAccess") private var dismissedDiskAccess = false
     @FocusState private var listFocused: Bool
     @State private var dismissedFailures: Set<String> = []
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
+                .toolbar(removing: .sidebarToggle)
         } detail: {
             detail
         }
@@ -362,12 +364,23 @@ struct MainView: View {
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
+            Button {
+                withAnimation(.smooth) { columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly }
+            } label: {
+                Label("Sidebar", systemImage: "sidebar.leading")
+            }
+            .help("Show or hide the sidebar")
+        }
+        .withoutGlass()
+
+        ToolbarItem(placement: .navigation) {
             Button { model.rescan() } label: {
                 Label("Rescan", systemImage: "arrow.clockwise")
             }
             .disabled(model.isScanning)
             .help("Rescan every worktree (⌘R)")
         }
+        .withoutGlass()
 
         ToolbarItem(placement: .status) {
             if model.isScanning || model.isMeasuring {
@@ -377,6 +390,7 @@ struct MainView: View {
                     .transition(.opacity)
             }
         }
+        .withoutGlass()
 
         ToolbarItem(placement: .primaryAction) {
             Button {
@@ -394,6 +408,7 @@ struct MainView: View {
             .disabled(model.sweepCandidates.isEmpty || model.isWorking)
             .help("Delete regenerable build output. Reversible by reinstalling.")
         }
+        .withoutGlass()
 
         ToolbarItem(placement: .primaryAction) {
             SettingsLink {
@@ -401,6 +416,7 @@ struct MainView: View {
             }
             .help("Coppice Settings (⌘,)")
         }
+        .withoutGlass()
 
         ToolbarItem(placement: .primaryAction) {
             Button { showInspector.toggle() } label: {
@@ -408,6 +424,7 @@ struct MainView: View {
             }
             .help("Show or hide the inspector")
         }
+        .withoutGlass()
     }
 
     private var subtitle: String {

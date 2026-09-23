@@ -163,7 +163,8 @@ enum Sweeper {
             outcome.failures.append(Item(path: worktree.path, reason: error.localizedDescription))
             log("remove failed \(worktree.path): \(error.localizedDescription)")
             if worktree.isLocked {
-                Git.run(["worktree", "lock", "--reason", worktree.lockReason, worktree.path], in: worktree.repoPath)
+                let relock = Git.run(["worktree", "lock", "--reason", worktree.lockReason, worktree.path], in: worktree.repoPath)
+                if !relock.succeeded { log("relock failed \(worktree.path): \(relock.stderr)") }
             }
             return outcome
         }
