@@ -50,16 +50,6 @@ struct CoppiceApp: App {
             MenuBarLabel(model: model, settings: settings)
         }
         .menuBarExtraStyle(.window)
-
-        Settings {
-            SettingsView()
-                .font(.ui)
-                .preferredColorScheme(.dark)
-                .tint(.white)
-                .environmentObject(model)
-                .environmentObject(settings)
-                .environmentObject(updater)
-        }
     }
 }
 
@@ -72,6 +62,11 @@ struct CoppiceCommands: Commands {
     @ObservedObject var updater: Updater
 
     var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") { model.openSettings() }
+                .keyboardShortcut(",", modifiers: .command)
+        }
+
         CommandGroup(replacing: .newItem) {}
         CommandGroup(replacing: .saveItem) {}
 

@@ -1,26 +1,40 @@
 import SwiftUI
 import AppKit
 
-struct SettingsView: View {
-    var body: some View {
-        TabView {
-            GeneralSettings()
-                .tabItem { Label("General", systemImage: "gearshape") }
-            ScanningSettings()
-                .tabItem { Label("Scanning", systemImage: "folder") }
-            AboutSettings()
-                .tabItem { Label("About", systemImage: "info.circle") }
+enum SettingsPane: String, CaseIterable, Identifiable {
+    case general
+    case scanning
+    case diagnostics
+    case about
+
+    var id: Self { self }
+
+    var title: String { rawValue.capitalized }
+
+    var symbol: String {
+        switch self {
+        case .general: return "gearshape"
+        case .scanning: return "folder"
+        case .diagnostics: return "stethoscope"
+        case .about: return "info.circle"
         }
-        .font(.ui)
-        .tint(.white)
-        .frame(width: 580, height: 560)
-        .toolbarBackground(.black, for: .windowToolbar)
-        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
-        .background(.black)
     }
 }
 
-private struct SettingsForm<Content: View>: View {
+struct SettingsPaneView: View {
+    let pane: SettingsPane
+
+    var body: some View {
+        switch pane {
+        case .general: GeneralSettings()
+        case .scanning: ScanningSettings()
+        case .diagnostics: DiagnosticsSettings()
+        case .about: AboutSettings()
+        }
+    }
+}
+
+struct SettingsForm<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -33,7 +47,7 @@ private struct SettingsForm<Content: View>: View {
     }
 }
 
-private struct SettingsHeader: View {
+struct SettingsHeader: View {
     let title: String
 
     var body: some View {
@@ -46,7 +60,7 @@ private struct SettingsHeader: View {
     }
 }
 
-private struct Hint: View {
+struct Hint: View {
     let text: String
 
     init(_ text: String) { self.text = text }
@@ -243,12 +257,9 @@ private struct AboutSettings: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, Space.s)
 
-            HStack(spacing: Space.xl) {
-                Button("Activity log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
-                Button("Source code") {
-                    if let url = URL(string: "https://github.com/\(Updater.repository)") {
-                        NSWorkspace.shared.open(url)
-                    }
+            Button("Source code") {
+                if let url = URL(string: "https://github.com/\(Updater.repository)") {
+                    NSWorkspace.shared.open(url)
                 }
             }
             .buttonStyle(.link)

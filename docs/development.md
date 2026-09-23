@@ -46,7 +46,7 @@ Then quit and reopen the app.
 This read-only check inspects the running app through macOS Accessibility. It never clicks, activates or moves anything:
 
 ```sh
-osascript -l JavaScript Scripts/ui-check.js "Coppice Dev"
+osascript -l JavaScript Scripts/ui-check.js
 ```
 
 ### Tests

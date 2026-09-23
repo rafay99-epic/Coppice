@@ -44,23 +44,42 @@ struct MainView: View {
 
     @State private var scope: Scope = .all
     @State private var showInspector = true
+    @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var search = ""
     @AppStorage("dismissedDiskAccess") private var dismissedDiskAccess = false
     @FocusState private var listFocused: Bool
+    @FocusState var searchFocused: Bool
     @State private var dismissedFailures: Set<String> = []
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
+                .toolbar(removing: .sidebarToggle)
         } detail: {
             detail
         }
         .navigationTitle("Coppice")
         .toolbar(removing: .title)
         .font(.ui)
+        .animation(.smooth(duration: 0.35), value: model.settingsPane)
     }
 
     private var sidebar: some View {
+        ZStack {
+            if let pane = model.settingsPane {
+                settingsSidebar(selected: pane)
+                    .transition(.move(edge: .trailing))
+            } else {
+                scopeSidebar
+                    .transition(.move(edge: .leading))
+            }
+        }
+        .clipped()
+        .background(.black)
+        .navigationSplitViewColumnWidth(min: 240, ideal: 250, max: 320)
+    }
+
+    private var scopeSidebar: some View {
         List {
             Section {
                 sidebarRow(.all, count: model.visibleReports.count)
@@ -84,46 +103,62 @@ struct MainView: View {
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
-        .background(.black)
-        .navigationSplitViewColumnWidth(min: 240, ideal: 250, max: 320)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            SidebarRow(title: "Settings", symbol: "gearshape", selected: false) {
+                model.settingsPane = .general
+            }
+            .padding(.horizontal, Space.m + Space.xs)
+            .padding(.vertical, Space.s)
+            .background(.black)
+        }
     }
 
     private func sidebarRow(_ row: Scope, count: Int) -> some View {
-        let selected = scope == row
-        return Button {
+        SidebarRow(title: row.title, symbol: row.symbol, selected: scope == row, count: count) {
             scope = row
-        } label: {
-            HStack(spacing: Space.m) {
-                Image(systemName: row.symbol)
-                    .frame(width: 18)
-                    .foregroundStyle(selected ? .primary : .tertiary)
-                Text(row.title)
-                    .foregroundStyle(selected ? .primary : .secondary)
-                    .lineLimit(1)
-                    .layoutPriority(1)
-                Spacer(minLength: Space.xs)
-                Text("\(count)")
-                    .font(.uiCaption)
-                    .monospacedDigit()
-                    .foregroundStyle(.tertiary)
-                    .numeric(count)
-                    .fixedSize()
-            }
-            .font(.ui.weight(selected ? .medium : .regular))
-            .padding(.horizontal, Space.s)
-            .padding(.vertical, 7)
-            .contentShape(.rect)
-            .background(.white.opacity(selected ? 0.12 : 0), in: .rect(cornerRadius: 6))
-            .animation(.snappy(duration: 0.2), value: selected)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(row.title)
         .accessibilityValue("\(count) worktrees")
-        .accessibilityAddTraits(selected ? .isSelected : [])
         .listRowInsets(EdgeInsets(top: 1, leading: Space.s, bottom: 1, trailing: Space.s))
     }
 
     private var detail: some View {
+        ZStack {
+            if let pane = model.settingsPane {
+                settingsDetail(pane)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                worktreeDetail
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .background(.black)
+        .toolbar { toolbar }
+        .inspector(isPresented: inspectorVisible) {
+            InspectorView()
+                .inspectorColumnWidth(min: 290, ideal: 330, max: 420)
+        }
+        .confirmationDialog(
+            "Sweep build artifacts in \(model.sweepCandidates.count) worktrees?",
+            isPresented: $model.confirmingSweep,
+            titleVisibility: .visible
+        ) {
+            Button("Sweep \(Format.bytes(model.reclaimableBytes))") {
+                Task { await model.sweep(model.sweepCandidates) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Source, git history and local config are untouched. An install command rebuilds everything this removes.")
+        }
+    }
+
+    private var inspectorVisible: Binding<Bool> {
+        Binding(
+            get: { showInspector && model.settingsPane == nil },
+            set: { showInspector = $0 }
+        )
+    }
+
+    private var worktreeDetail: some View {
         VStack(spacing: 0) {
             if !model.unreadableRoots.isEmpty, !dismissedDiskAccess {
                 diskAccessBanner
@@ -165,24 +200,6 @@ struct MainView: View {
         .background(.black)
         .animation(.smooth, value: model.banner)
         .animation(.smooth, value: model.activity.isMutating)
-        .searchable(text: $search, placement: .toolbar, prompt: "Filter worktrees")
-        .toolbar { toolbar }
-        .inspector(isPresented: $showInspector) {
-            InspectorView()
-                .inspectorColumnWidth(min: 290, ideal: 330, max: 420)
-        }
-        .confirmationDialog(
-            "Sweep build artifacts in \(model.sweepCandidates.count) worktrees?",
-            isPresented: $model.confirmingSweep,
-            titleVisibility: .visible
-        ) {
-            Button("Sweep \(Format.bytes(model.reclaimableBytes))") {
-                Task { await model.sweep(model.sweepCandidates) }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Source, git history and local config are untouched. An install command rebuilds everything this removes.")
-        }
     }
 
     private var visibleFailures: Banner? {
@@ -229,17 +246,30 @@ struct MainView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
-            Text(scope.title)
-                .font(.display(30))
-                .contentTransition(.opacity)
-                .animation(.smooth, value: scope)
-            Text(subtitle)
-                .font(.uiCallout)
-                .foregroundStyle(.secondary)
-                .numeric(subtitle)
+        VStack(alignment: .leading, spacing: Space.s) {
+            HStack(alignment: .center, spacing: Space.m) {
+                Text(scope.title)
+                    .font(.display(30))
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
+                    .animation(.smooth, value: scope)
+                Spacer(minLength: Space.m)
+                headerActions
+            }
+            HStack(spacing: Space.m) {
+                Text(subtitle)
+                    .font(.uiCallout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .numeric(subtitle)
+                Spacer(minLength: Space.m)
+                activityStatus
+                    .opacity(model.isScanning || model.isMeasuring ? 1 : 0)
+                    .animation(.smooth, value: model.isScanning || model.isMeasuring)
+                    .frame(width: 130, alignment: .trailing)
+                filterField
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Space.xl)
         .padding(.top, Space.l)
         .padding(.bottom, Space.s)
@@ -295,6 +325,7 @@ struct MainView: View {
             .background(.black)
             .focusable()
             .focused($listFocused)
+            .defaultFocus($listFocused, true)
             .focusEffectDisabled()
             .onKeyPress(.upArrow) { moveSelection(by: -1) }
             .onKeyPress(.downArrow) { moveSelection(by: 1) }
@@ -351,7 +382,7 @@ struct MainView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             if foundNothing {
-                SettingsLink { Text("Open Settings") }
+                Button("Open Settings") { model.openSettings(.scanning) }
                     .buttonStyle(.mono)
                     .padding(.top, Space.s)
             }
@@ -359,63 +390,10 @@ struct MainView: View {
         .padding(Space.xxl)
     }
 
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            Button { model.rescan() } label: {
-                Label("Rescan", systemImage: "arrow.clockwise")
-            }
-            .disabled(model.isScanning)
-            .help("Rescan every worktree (⌘R)")
-        }
-
-        ToolbarItem(placement: .status) {
-            if model.isScanning || model.isMeasuring {
-                Text(model.isScanning ? "Scanning" : "Sizing")
-                    .font(.uiCaption)
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity)
-            }
-        }
-
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                model.confirmingSweep = true
-            } label: {
-                Label(
-                    model.reclaimableBytes > 0 ? "Sweep \(Format.compactBytes(model.reclaimableBytes))" : "Sweep",
-                    systemImage: "scissors"
-                )
-            }
-            .buttonStyle(.mono)
-            .labelStyle(.titleAndIcon)
-            .contentTransition(.numericText())
-            .animation(.smooth, value: model.reclaimableBytes)
-            .disabled(model.sweepCandidates.isEmpty || model.isWorking)
-            .help("Delete regenerable build output. Reversible by reinstalling.")
-        }
-
-        ToolbarItem(placement: .primaryAction) {
-            SettingsLink {
-                Label("Settings", systemImage: "gearshape")
-            }
-            .help("Coppice Settings (⌘,)")
-        }
-
-        ToolbarItem(placement: .primaryAction) {
-            Button { showInspector.toggle() } label: {
-                Label("Inspector", systemImage: "sidebar.trailing")
-            }
-            .help("Show or hide the inspector")
-        }
-    }
-
     private var subtitle: String {
         if model.isScanning, model.visibleReports.isEmpty { return "Scanning…" }
         let count = model.visibleReports.count
-        let measured = model.visibleReports.filter(\.measured).count
-        let sizing = measured < count ? " · sizing \(measured) of \(count)" : ""
-        return "\(count) worktrees · \(Format.bytes(model.totalBytes))\(sizing)"
+        return "\(count) worktrees · \(Format.bytes(model.totalBytes))"
     }
 
     private var filteredGroups: [RepoGroup] {
@@ -435,10 +413,207 @@ struct MainView: View {
     }
 }
 
+extension MainView {
+    @ToolbarContentBuilder
+    var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button {
+                withAnimation(.smooth) { columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly }
+            } label: {
+                Label("Sidebar", systemImage: "sidebar.leading")
+            }
+            .help("Show or hide the sidebar")
+        }
+        .withoutGlass()
+    }
+
+    var headerActions: some View {
+        HStack(spacing: Space.m) {
+            Button {
+                model.confirmingSweep = true
+            } label: {
+                ZStack {
+                    Label("Sweep 888.8 MB", systemImage: "scissors").hidden()
+                    Label(
+                        model.reclaimableBytes > 0 ? "Sweep \(Format.compactBytes(model.reclaimableBytes))" : "Sweep",
+                        systemImage: "scissors"
+                    )
+                    .numeric(model.reclaimableBytes)
+                }
+                .labelStyle(.titleAndIcon)
+            }
+            .buttonStyle(.mono)
+            .disabled(model.sweepCandidates.isEmpty || model.isWorking)
+            .help("Delete regenerable build output. Reversible by reinstalling.")
+
+            Button { model.rescan() } label: {
+                Image(systemName: "arrow.clockwise")
+                    .symbolEffect(.rotate, isActive: model.isScanning)
+                    .frame(width: 28, height: 28)
+                    .contentShape(.rect)
+            }
+            .disabled(model.isScanning)
+            .accessibilityLabel("Rescan")
+            .help("Rescan every worktree (⌘R)")
+
+            Button { showInspector.toggle() } label: {
+                Image(systemName: "sidebar.trailing")
+                    .frame(width: 28, height: 28)
+                    .contentShape(.rect)
+            }
+            .accessibilityLabel("Inspector")
+            .help("Show or hide the inspector")
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .imageScale(.large)
+    }
+
+    var filterField: some View {
+        HStack(spacing: Space.s) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.tertiary)
+            TextField("Filter worktrees", text: $search)
+                .textFieldStyle(.plain)
+                .focused($searchFocused)
+                .onExitCommand { search = "" }
+                .task { searchFocused = false }
+            if !search.isEmpty {
+                Button { search = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tertiary)
+                .accessibilityLabel("Clear filter")
+            }
+        }
+        .font(.uiCallout)
+        .padding(.horizontal, Space.s)
+        .padding(.vertical, 5)
+        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(searchFocused ? 0.35 : 0.14)))
+        .frame(maxWidth: 240)
+        .background {
+            Button("Find") { searchFocused = true }
+                .keyboardShortcut("f")
+                .opacity(0)
+                .accessibilityHidden(true)
+        }
+    }
+
+    func settingsSidebar(selected: SettingsPane) -> some View {
+        List {
+            SidebarRow(title: "Back", symbol: "chevron.left", selected: false) {
+                model.settingsPane = nil
+            }
+            .keyboardShortcut(.cancelAction)
+            .listRowInsets(EdgeInsets(top: 1, leading: Space.s, bottom: 1, trailing: Space.s))
+
+            Section {
+                ForEach(SettingsPane.allCases) { pane in
+                    SidebarRow(title: pane.title, symbol: pane.symbol, selected: pane == selected) {
+                        model.settingsPane = pane
+                    }
+                    .listRowInsets(EdgeInsets(top: 1, leading: Space.s, bottom: 1, trailing: Space.s))
+                }
+            } header: {
+                SectionLabel("Settings")
+                    .padding(.top, Space.m)
+                    .padding(.leading, Space.s)
+            }
+        }
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+    }
+
+    func settingsDetail(_ pane: SettingsPane) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(pane.title)
+                .font(.display(30))
+                .contentTransition(.opacity)
+                .padding(.horizontal, Space.xl)
+                .padding(.top, Space.l)
+            SettingsPaneView(pane: pane)
+                .frame(maxWidth: 680)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    var sizingProgress: (done: Int, total: Int) {
+        (model.visibleReports.filter(\.measured).count, model.visibleReports.count)
+    }
+
+    var activityStatus: some View {
+        let progress = sizingProgress
+        return HStack(spacing: Space.s) {
+            if model.isScanning {
+                Text("Scanning")
+            } else {
+                ZStack {
+                    Circle().stroke(.white.opacity(0.2), lineWidth: 1.5)
+                    Circle()
+                        .trim(from: 0, to: Double(progress.done) / Double(max(progress.total, 1)))
+                        .stroke(.white, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.smooth, value: progress.done)
+                }
+                .frame(width: 11, height: 11)
+                Text("Sizing \(progress.done) of \(progress.total)")
+                    .monospacedDigit()
+                    .numeric(progress.done)
+            }
+        }
+        .font(.uiCaption)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .fixedSize()
+        .accessibilityElement(children: .combine)
+    }
+}
+
 extension WorktreeReport {
     var accessibilitySummary: String {
         let size = measured ? Format.bytes(totalBytes) : "size pending"
         return "\(worktree.name), \(worktree.displayBranch), \(size), \(verdict.shortLabel)"
+    }
+}
+
+struct SidebarRow: View {
+    let title: String
+    let symbol: String
+    let selected: Bool
+    var count: Int?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Space.m) {
+                Image(systemName: symbol)
+                    .frame(width: 18)
+                    .foregroundStyle(selected ? .primary : .tertiary)
+                Text(title)
+                    .foregroundStyle(selected ? .primary : .secondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                Spacer(minLength: Space.xs)
+                if let count {
+                    Text("\(count)")
+                        .font(.uiCaption)
+                        .monospacedDigit()
+                        .foregroundStyle(.tertiary)
+                        .numeric(count)
+                        .fixedSize()
+                }
+            }
+            .font(.ui.weight(selected ? .medium : .regular))
+            .padding(.horizontal, Space.s)
+            .padding(.vertical, 7)
+            .contentShape(.rect)
+            .background(.white.opacity(selected ? 0.12 : 0), in: .rect(cornerRadius: 6))
+            .animation(.snappy(duration: 0.2), value: selected)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

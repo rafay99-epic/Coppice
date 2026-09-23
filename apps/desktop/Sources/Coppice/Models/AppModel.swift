@@ -87,6 +87,7 @@ final class AppModel: ObservableObject {
     @Published var banner: Banner?
     @Published var selection: String?
     @Published var confirmingSweep = false
+    @Published var settingsPane: SettingsPane?
     @Published private(set) var unreadableRoots: [String] = []
     @Published private(set) var scanFailures: [Sweeper.Item] = []
 
@@ -495,6 +496,11 @@ final class AppModel: ObservableObject {
             message: "Removed \(outcome.removedPaths.count) folder"
                 + "\(outcome.removedPaths.count == 1 ? "" : "s"). Reinstall to bring them back."
         )
+    }
+
+    func openSettings(_ pane: SettingsPane = .general) {
+        settingsPane = pane
+        NotificationCenter.default.post(name: AppDelegate.showWindow, object: nil)
     }
 
     func settingsChanged() {
