@@ -15,7 +15,7 @@ struct Worktree: Identifiable, Hashable, Sendable {
     var id: String { path }
     var name: String { (path as NSString).lastPathComponent }
     var repoName: String { (repoPath as NSString).lastPathComponent }
-    var displayBranch: String { branch ?? "detached at \(head.prefix(7))" }
+    var displayBranch: String { branch ?? (head.isEmpty ? "no branch" : "detached at \(head.prefix(7))") }
 }
 
 enum Severity: Equatable, Hashable, Sendable {

@@ -56,10 +56,12 @@ struct MainView: View {
         }
         .navigationTitle("Coppice")
         .navigationSubtitle(subtitle)
+        .toolbarBackground(.black, for: .windowToolbar)
+        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
     }
 
     private var sidebar: some View {
-        List(selection: $scope) {
+        List {
             Section {
                 sidebarRow(.all, count: model.visibleReports.count)
                 sidebarRow(.sweepable, count: model.sweepCandidates.count)
@@ -77,13 +79,36 @@ struct MainView: View {
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .background(.black)
         .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 280)
     }
 
-    private func sidebarRow(_ scope: Scope, count: Int) -> some View {
-        Label(scope.title, systemImage: scope.symbol)
-            .badge(count)
-            .tag(scope)
+    private func sidebarRow(_ row: Scope, count: Int) -> some View {
+        let selected = scope == row
+        return Button {
+            scope = row
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: row.symbol)
+                    .frame(width: 18)
+                    .foregroundStyle(selected ? .primary : .secondary)
+                Text(row.title)
+                Spacer(minLength: 6)
+                Text("\(count)")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .numeric(count)
+            }
+            .fontWeight(selected ? .semibold : .regular)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .contentShape(.rect)
+            .background(.white.opacity(selected ? 0.12 : 0), in: .rect(cornerRadius: 6))
+            .animation(.snappy(duration: 0.2), value: selected)
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 1, leading: 4, bottom: 1, trailing: 4))
     }
 
     private var detail: some View {
@@ -167,13 +192,9 @@ struct MainView: View {
     }
 
     private var worktreeList: some View {
-        List(selection: $model.selection) {
-            ForEach(filteredGroups, id: \.path) { group in
-                Section {
-                    ForEach(group.reports) { report in
-                        WorktreeRow(report: report).tag(report.id)
-                    }
-                } header: {
+        ScrollViewReader { proxy in
+            List {
+                ForEach(filteredGroups, id: \.path) { group in
                     HStack {
                         Text(group.repo)
                         Spacer()
@@ -182,17 +203,52 @@ struct MainView: View {
                                 ? Format.compactBytes(group.reports.reduce(0) { $0 + $1.totalBytes })
                                 : "—"
                         )
-                            .foregroundStyle(.tertiary)
-                            .monospacedDigit()
-                            .contentTransition(.numericText())
+                        .foregroundStyle(.tertiary)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 14)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    ForEach(group.reports) { report in
+                        let selected = model.selection == report.id
+                        WorktreeRow(report: report)
+                            .id(report.id)
+                            .contentShape(.rect)
+                            .onTapGesture { model.selection = report.id }
+                            .listRowBackground(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(.white.opacity(selected ? 0.12 : 0))
+                                    .padding(.horizontal, 8)
+                                    .animation(.snappy(duration: 0.2), value: selected)
+                            )
                     }
                 }
             }
+            .listStyle(.inset)
+            .scrollContentBackground(.hidden)
+            .background(.black)
+            .focusable()
+            .focusEffectDisabled()
+            .onKeyPress(.upArrow) { moveSelection(by: -1) }
+            .onKeyPress(.downArrow) { moveSelection(by: 1) }
+            .animation(.smooth, value: filteredGroups.flatMap { $0.reports.map(\.id) })
+            .onChange(of: model.selection) { _, id in
+                guard let id else { return }
+                withAnimation(.smooth) { proxy.scrollTo(id) }
+            }
         }
-        .listStyle(.inset)
-        .scrollContentBackground(.hidden)
-        .background(.black)
-        .animation(.smooth, value: filteredGroups.flatMap { $0.reports.map(\.id) })
+    }
+
+    private func moveSelection(by offset: Int) -> KeyPress.Result {
+        let ids = filteredGroups.flatMap { $0.reports.map(\.id) }
+        guard !ids.isEmpty else { return .ignored }
+        let current = model.selection.flatMap { ids.firstIndex(of: $0) }
+        let next = current.map { min(max($0 + offset, 0), ids.count - 1) } ?? 0
+        model.selection = ids[next]
+        return .handled
     }
 
     private var foundNothing: Bool {

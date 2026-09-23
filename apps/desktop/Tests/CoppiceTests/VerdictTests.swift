@@ -335,4 +335,15 @@ final class VerdictTests: XCTestCase {
 
         XCTAssertTrue(ArtifactScanner.scan(worktree: worktree.path).isEmpty)
     }
+
+    func testAgentWorktreeFindsItsRepositoryOutsideTheCodeFolders() throws {
+        let path = root.appending(path: ".t3/worktrees/app/agent-task")
+        git(["worktree", "add", "-b", "agent-task", path.path, "main"])
+        let narrow = WorktreeScanner(home: root, codeRoots: [root.appending(path: "elsewhere")])
+
+        let found = try XCTUnwrap(narrow.inventory().first { $0.name == "agent-task" })
+        XCTAssertFalse(found.isOrphan)
+        XCTAssertEqual(found.branch, "agent-task")
+        XCTAssertEqual(found.repoName, "app")
+    }
 }

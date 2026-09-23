@@ -17,6 +17,8 @@ struct InspectorView: View {
                 )
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.black)
         .sheet(isPresented: $confirmingRemoval) {
             if let report = model.selectedReport {
                 RemoveSheet(report: report) { deleteBranch in

@@ -32,7 +32,22 @@ struct WorktreeScanner: @unchecked Sendable {
                 }
             }
         }
+        for (_, root) in agentWorktreeRoots() {
+            for candidate in orphanCandidates(under: root) {
+                if let repo = parentRepository(ofWorktree: candidate) { found.insert(repo) }
+            }
+        }
         return found.sorted()
+    }
+
+    func parentRepository(ofWorktree path: String) -> String? {
+        let pointer = URL(fileURLWithPath: path).appending(path: ".git")
+        guard let contents = try? String(contentsOf: pointer, encoding: .utf8),
+              let line = contents.split(separator: "\n").first(where: { $0.hasPrefix("gitdir:") }) else { return nil }
+        let gitdir = line.dropFirst("gitdir:".count).trimmingCharacters(in: .whitespaces)
+        guard let range = gitdir.range(of: "/.git/worktrees/") else { return nil }
+        let repo = URL(fileURLWithPath: String(gitdir[..<range.lowerBound]))
+        return isRepository(repo) ? repo.resolvingSymlinksInPath().path : nil
     }
 
     func agentWorktreeRoots() -> [(harness: Harness, root: URL)] {
