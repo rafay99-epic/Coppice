@@ -23,7 +23,7 @@ jobs:
     name: Test (swift test)
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Configure git identity
         run: |
           git config --global user.email "ci@example.com"
@@ -35,7 +35,7 @@ jobs:
     name: Quality (SwiftLint)
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: brew install swiftlint
       - name: Lint
         working-directory: .
@@ -48,7 +48,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
