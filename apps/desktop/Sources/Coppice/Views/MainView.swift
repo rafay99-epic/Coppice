@@ -375,7 +375,12 @@ struct MainView: View {
 
         ToolbarItem(placement: .navigation) {
             Button { model.rescan() } label: {
-                Label("Rescan", systemImage: "arrow.clockwise")
+                Label {
+                    Text("Rescan")
+                } icon: {
+                    Image(systemName: "arrow.clockwise")
+                        .symbolEffect(.rotate, isActive: model.isScanning)
+                }
             }
             .disabled(model.isScanning)
             .help("Rescan every worktree (⌘R)")
@@ -383,12 +388,10 @@ struct MainView: View {
         .withoutGlass()
 
         ToolbarItem(placement: .status) {
-            if model.isScanning || model.isMeasuring {
-                Text(model.isScanning ? "Scanning" : "Sizing")
-                    .font(.uiCaption)
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity)
-            }
+            activityStatus
+                .opacity(model.isScanning || model.isMeasuring ? 1 : 0)
+                .animation(.smooth, value: model.isScanning || model.isMeasuring)
+                .frame(width: 150, alignment: .trailing)
         }
         .withoutGlass()
 
@@ -427,12 +430,37 @@ struct MainView: View {
         .withoutGlass()
     }
 
+    private var sizingProgress: (done: Int, total: Int) {
+        (model.visibleReports.filter(\.measured).count, model.visibleReports.count)
+    }
+
+    private var activityStatus: some View {
+        let progress = sizingProgress
+        return HStack(spacing: Space.s) {
+            if model.isScanning {
+                Text("Scanning")
+            } else {
+                ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
+                    .progressViewStyle(.circular)
+                    .controlSize(.mini)
+                    .tint(.white)
+                    .animation(.smooth, value: progress.done)
+                Text("Sizing \(progress.done) of \(progress.total)")
+                    .monospacedDigit()
+                    .numeric(progress.done)
+            }
+        }
+        .font(.uiCaption)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .fixedSize()
+        .accessibilityElement(children: .combine)
+    }
+
     private var subtitle: String {
         if model.isScanning, model.visibleReports.isEmpty { return "Scanning…" }
         let count = model.visibleReports.count
-        let measured = model.visibleReports.filter(\.measured).count
-        let sizing = measured < count ? " · sizing \(measured) of \(count)" : ""
-        return "\(count) worktrees · \(Format.bytes(model.totalBytes))\(sizing)"
+        return "\(count) worktrees · \(Format.bytes(model.totalBytes))"
     }
 
     private var filteredGroups: [RepoGroup] {
