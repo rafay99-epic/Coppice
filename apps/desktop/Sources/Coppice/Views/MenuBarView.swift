@@ -148,6 +148,7 @@ struct MenuBarView: View {
 
                     Button("Cancel") { armedSweep = false }
                         .buttonStyle(.plain)
+                        .fixedSize()
                         .foregroundStyle(.secondary)
                 } else {
                     Button {
@@ -161,6 +162,7 @@ struct MenuBarView: View {
 
                     Button("Open Coppice") { openMainWindow(openWindow) }
                         .buttonStyle(.plain)
+                        .fixedSize()
                         .foregroundStyle(.secondary)
                 }
 

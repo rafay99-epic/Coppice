@@ -64,6 +64,7 @@ struct BannerView: View {
                 if banner.kind != .success {
                     Button("Open log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
                         .buttonStyle(.plain)
+                        .fixedSize()
                         .font(.uiCaption)
                         .foregroundStyle(.secondary)
                 }
@@ -73,6 +74,7 @@ struct BannerView: View {
                         withAnimation(.smooth) { showingDetails.toggle() }
                     }
                     .buttonStyle(.plain)
+                    .fixedSize()
                     .font(.uiCaption)
                     .foregroundStyle(.secondary)
                 }

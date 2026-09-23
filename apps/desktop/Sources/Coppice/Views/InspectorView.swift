@@ -135,6 +135,7 @@ struct InspectorView: View {
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: report.worktree.path)
             }
             .buttonStyle(.plain)
+            .fixedSize()
             .font(.uiCallout)
             .underline()
             .disabled(report.verdict == .prunable)
@@ -315,6 +316,7 @@ struct RemoveSheet: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.plain)
+                    .fixedSize()
                     .foregroundStyle(.secondary)
                     .keyboardShortcut(.cancelAction)
                 Button("Move to Trash") {

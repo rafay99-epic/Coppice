@@ -124,6 +124,7 @@ struct OnboardingView: View {
             if step > 0 {
                 Button("Back") { step -= 1 }
                     .buttonStyle(.plain)
+                    .fixedSize()
                     .foregroundStyle(.secondary)
             }
             Button(step == stepCount - 1 ? "Start using Coppice" : "Continue") {

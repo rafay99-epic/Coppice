@@ -73,6 +73,8 @@ struct MonoButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .lineLimit(1)
+            .fixedSize()
             .font(.ui.weight(.medium))
             .foregroundStyle(.black)
             .padding(.horizontal, Space.l)
@@ -94,6 +96,8 @@ struct QuietButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .lineLimit(1)
+            .fixedSize()
             .font(.ui.weight(.medium))
             .foregroundStyle(.primary)
             .padding(.horizontal, Space.l)
