@@ -1,0 +1,38 @@
+apps/desktop/Sources/Coppice/Services/DirectoryWatcher.swift
+  s_3e3dfec32bf217::t_e5ed80f8fd7902 67-70
+apps/desktop/Sources/Coppice/Services/Shell.swift
+  s_3e3dfec32bf217::t_e5ed80f8fd7902 41,62
+apps/desktop/Sources/Coppice/Services/WorktreeScanner.swift
+  s_3e3dfec32bf217::t_e5ed80f8fd7902 74-76,78,81-88,109
+apps/desktop/Sources/Coppice/Views/ActivityViews.swift
+  s_3e3dfec32bf217::t_a3e71d7cff6831 64-70
+apps/desktop/Sources/Coppice/Services/Log.swift
+  s_3e3dfec32bf217::t_a038c6eb9d0fb2 1,5-15,36-43,49-63,80-84,92
+  s_3e3dfec32bf217::t_170b49f07bfe26 44-48,64-76
+apps/desktop/Sources/Coppice/Models/AppModel.swift
+  s_3e3dfec32bf217::t_65a2c46d46f5ca 90,194-199,204-205,215,220
+apps/desktop/Sources/Coppice/Services/GitHub.swift
+  s_3e3dfec32bf217::t_e5ed80f8fd7902 63-69
+apps/desktop/Sources/Coppice/Updates/Updater.swift
+  s_3e3dfec32bf217::t_e5ed80f8fd7902 84
+apps/desktop/Sources/Coppice/App/CoppiceApp.swift
+  s_3e3dfec32bf217::t_1137db2a831d5a 129
+  s_3e3dfec32bf217::t_170b49f07bfe26 140-141
+  s_3e3dfec32bf217::t_c9301bbfade1ae 27-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "dcb1eebfff327baece7ca37e89a4fa6bd0e1abf5",
+  "prompts": {},
+  "sessions": {
+    "s_3e3dfec32bf217": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fc78b36b-49ba-4f4d-b965-573ed26d3610",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
