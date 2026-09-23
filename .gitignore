@@ -18,3 +18,4 @@ apps/desktop/Resources/*.icns
 .env*.local
 
 worktree-cleanup-plan.html
+*.tsbuildinfo
