@@ -1,7 +1,14 @@
 function run(argv) {
-  const processName = argv[0] || "Coppice Dev";
+  const processName = argv[0] || "com.syntaxlabtechnology.coppice.dev";
   const events = Application("System Events");
-  const app = events.processes().find((candidate) => candidate.displayedName() === processName || candidate.name() === processName);
+  const matches = (candidate) => {
+    try {
+      return [candidate.bundleIdentifier(), candidate.displayedName(), candidate.name()].includes(processName);
+    } catch (error) {
+      return false;
+    }
+  };
+  const app = events.processes().find(matches);
   if (!app) throw new Error(`${processName} is not running`);
 
   const failures = [];

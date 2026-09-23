@@ -51,10 +51,10 @@ fi
 APP="build/$APP_NAME.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BINARY" "$APP/Contents/MacOS/Coppice"
+cp "$BINARY" "$APP/Contents/MacOS/$APP_NAME"
 MIN_OS="$(vtool -show-build "$BINARY" | awk '/minos/ {print $2; exit}')"
 SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
-vtool -set-build-version macos "$MIN_OS" "$SDK_VERSION" -replace -output "$APP/Contents/MacOS/Coppice" "$APP/Contents/MacOS/Coppice"
+vtool -set-build-version macos "$MIN_OS" "$SDK_VERSION" -replace -output "$APP/Contents/MacOS/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
 echo "Build version: macOS $MIN_OS, SDK $SDK_VERSION"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
@@ -72,6 +72,7 @@ fi
 "$PB" -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
 "$PB" -c "Set :CFBundleIdentifier $BUNDLE_ID" "$APP/Contents/Info.plist"
 "$PB" -c "Set :CFBundleName $APP_NAME" "$APP/Contents/Info.plist"
+"$PB" -c "Set :CFBundleExecutable $APP_NAME" "$APP/Contents/Info.plist"
 "$PB" -c "Set :CFBundleDisplayName $APP_NAME" "$APP/Contents/Info.plist"
 "$PB" -c "Set :CoppiceChannel $CHANNEL" "$APP/Contents/Info.plist"
 if [ -n "${COPPICE_BUILD:-}" ]; then
