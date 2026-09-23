@@ -21,7 +21,7 @@ A version is `0.<number of commits on the branch>`. It goes up by itself with ev
 
 ## Promoting Nightly to Stable
 
-The **Promote nightly to stable** workflow squashes everything on `nightly` into one commit on `main`, then starts the release build.
+The **Promote nightly to stable** workflow adds one commit to `main` whose files match `nightly` exactly, then starts the release build. It never merges, so it can't conflict. The commit lists every change since the previous promotion and records the promoted `nightly` commit in a `Promoted-from` trailer, which is where the next changelog starts.
 
 1. On GitHub, open **Actions**, then **Promote nightly to stable**, then **Run workflow**.
 2. Choose the **`main`** branch.

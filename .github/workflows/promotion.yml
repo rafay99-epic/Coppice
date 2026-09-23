@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   promote:
-    name: Squash nightly into main
+    name: Promote nightly to main
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -40,10 +40,20 @@ jobs:
             exit 0
           fi
           echo "empty=false" >> "$GITHUB_OUTPUT"
+          since="$(git log -1 --format='%(trailers:key=Promoted-from,valueonly)' main | tr -d '[:space:]')"
+          if [ -n "$since" ] && git cat-file -e "$since^{commit}" 2>/dev/null; then
+            changes="$(git log --no-merges --pretty='- %s' "$since..origin/nightly")"
+          else
+            changes="$(git log --no-merges --pretty='- %s' --since="$(git log -1 --format=%cI main)" origin/nightly)"
+          fi
           {
+            echo "release: promote nightly $(git rev-parse --short origin/nightly)"
+            echo
             echo "## What changed"
             echo
-            git log --no-merges --pretty="- %s" main..origin/nightly
+            echo "$changes"
+            echo
+            echo "Promoted-from: $(git rev-parse origin/nightly)"
           } > /tmp/notes.md
           echo "--- promotion notes ---"
           cat /tmp/notes.md
@@ -53,13 +63,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git merge --squash origin/nightly
-          if git diff --cached --quiet; then
-            echo "::error::squash staged nothing, so there is nothing to promote"
-            exit 1
-          fi
-          git commit --file /tmp/notes.md
-          git push origin main
+          commit="$(git commit-tree "origin/nightly^{tree}" -p main -F /tmp/notes.md)"
+          git push origin "$commit:refs/heads/main"
 
           gh workflow run ci.yml --ref main
           echo "::notice::Promoted nightly to main and started the release build."
