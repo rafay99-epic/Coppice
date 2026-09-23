@@ -1,7 +1,7 @@
 {
   "name": "coppice-monorepo",
   "private": true,
-  "packageManager": "bun@1.3.11",
+  "packageManager": "bun@1.3.14",
   "workspaces": [
     "apps/*"
   ],
