@@ -81,6 +81,7 @@ final class Updater: ObservableObject {
             }
             lastChecked = Date()
         } catch {
+            Log.shared.error("update check failed: \(error.localizedDescription)")
             status = silent ? .idle : .failed("Check failed: \(error.localizedDescription)")
         }
     }

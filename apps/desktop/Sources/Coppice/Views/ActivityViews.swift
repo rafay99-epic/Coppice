@@ -61,6 +61,13 @@ struct BannerView: View {
 
                 Spacer(minLength: Space.s)
 
+                if banner.kind != .success {
+                    Button("Open log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
+                        .buttonStyle(.plain)
+                        .font(.uiCaption)
+                        .foregroundStyle(.secondary)
+                }
+
                 if !banner.details.isEmpty {
                     Button(showingDetails ? "Hide" : "Details") {
                         withAnimation(.smooth) { showingDetails.toggle() }

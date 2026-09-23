@@ -64,7 +64,10 @@ final class DirectoryWatcher {
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
             latency,
             flags
-        ) else { return }
+        ) else {
+            Log.shared.error("could not watch \(paths.count) folders for changes; rescan manually")
+            return
+        }
 
         FSEventStreamSetDispatchQueue(created, queue)
         FSEventStreamStart(created)

@@ -60,7 +60,13 @@ enum GitHub {
             cwd: repo,
             timeout: 25
         )
-        guard result.succeeded, let data = result.stdout.data(using: .utf8) else { return [:] }
+        guard result.succeeded, let data = result.stdout.data(using: .utf8) else {
+            let reason = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !reason.localizedCaseInsensitiveContains("remote") {
+                Log.shared.error("gh pr list failed in \(repo): \(reason)")
+            }
+            return [:]
+        }
         return parse(data)
     }
 

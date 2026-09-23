@@ -38,6 +38,7 @@ enum Shell {
         do {
             try process.run()
         } catch {
+            Log.shared.error("could not launch \(executable): \(error.localizedDescription)")
             return Result(status: -1, stdout: "", stderr: "\(error)")
         }
 
@@ -58,6 +59,7 @@ enum Shell {
 
         let deadline = DispatchWorkItem {
             guard process.isRunning else { return }
+            Log.shared.error("timed out after \(Int(timeout))s: \(executable) \(arguments.joined(separator: " "))")
             process.terminate()
         }
         queue.asyncAfter(deadline: .now() + timeout, execute: deadline)

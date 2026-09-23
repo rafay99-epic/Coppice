@@ -71,11 +71,21 @@ struct WorktreeScanner: @unchecked Sendable {
         fileManager.fileExists(atPath: url.appending(path: ".git").path)
     }
 
-    func inventory() -> [Worktree] {
+    func inventory() -> [Worktree] { scan().worktrees }
+
+    func scan() -> (worktrees: [Worktree], failures: [Sweeper.Item]) {
         var byPath: [String: Worktree] = [:]
+        var failures: [Sweeper.Item] = []
 
         for repo in discoverRepositories() {
-            for worktree in worktrees(inRepository: repo) {
+            let result = Git.worktreeList(repo: repo)
+            guard result.succeeded else {
+                let reason = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                failures.append(Sweeper.Item(path: repo, reason: reason.isEmpty ? "git worktree list failed" : reason))
+                Log.shared.error("could not read worktrees in \(repo): \(reason)")
+                continue
+            }
+            for worktree in Self.parseWorktreeList(result.stdout, repoPath: repo, home: home) {
                 byPath[worktree.path] = worktree
             }
         }
@@ -96,7 +106,7 @@ struct WorktreeScanner: @unchecked Sendable {
             }
         }
 
-        return byPath.values.filter { !$0.isMain }.sorted { $0.path < $1.path }
+        return (byPath.values.filter { !$0.isMain }.sorted { $0.path < $1.path }, failures)
     }
 
     private func orphanCandidates(under root: URL) -> [String] {

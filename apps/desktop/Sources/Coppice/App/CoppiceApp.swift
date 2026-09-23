@@ -24,6 +24,8 @@ struct CoppiceApp: App {
         Window("Coppice", id: WindowID.main) {
             RootView()
                 .font(.ui)
+                .toolbarBackground(.black, for: .windowToolbar)
+                .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
                 .environmentObject(model)
                 .environmentObject(settings)
                 .environmentObject(updater)
@@ -124,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Log.shared.write("Coppice \(Updater.currentVersion) (\(Channel.current.rawValue)) launched")
 
         installExceptionLogger()
+        Log.shared.installCrashHandlers()
 
         if AppSettings.presentsWindowAtLaunch {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -134,8 +137,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installExceptionLogger() {
         NSSetUncaughtExceptionHandler { exception in
-            Log.shared.write(
-                "UNCAUGHT \(exception.name.rawValue): \(exception.reason ?? "no reason given")"
+            Log.shared.critical(
+                "uncaught \(exception.name.rawValue): \(exception.reason ?? "no reason given")"
             )
         }
     }

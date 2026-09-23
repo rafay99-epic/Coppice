@@ -87,6 +87,7 @@ final class AppModel: ObservableObject {
     @Published var banner: Banner?
     @Published var selection: String?
     @Published private(set) var unreadableRoots: [String] = []
+    @Published private(set) var scanFailures: [Sweeper.Item] = []
 
     var isScanning: Bool { activity == .scanning }
     var isWorking: Bool { activity.isMutating }
@@ -190,12 +191,18 @@ final class AppModel: ObservableObject {
         let scanner = self.scanner
         let merged = Set(reports.filter(\.mergedAtHead).map(\.id))
         scanTask = Task { [weak self] in
-            let (fresh, unreadable) = await Task.detached(priority: .utility) { () -> ([WorktreeReport], [String]) in
+            let (fresh, unreadable, failures) = await Task.detached(priority: .utility) {
+                () -> ([WorktreeReport], [String], [Sweeper.Item]) in
+                guard FileManager.default.isExecutableFile(atPath: Git.executable) else {
+                    Log.shared.error("git not found at \(Git.executable)")
+                    return ([], [], [Sweeper.Item(path: Git.executable, reason: "Install the Xcode Command Line Tools")])
+                }
                 let files = FileManager.default
                 let unreadable = (scanner.codeRoots.map(\.path) + scanner.agentWorktreeRoots().map(\.root.path))
                     .filter { files.fileExists(atPath: $0) && (try? files.contentsOfDirectory(atPath: $0)) == nil }
                 let holders = ProcessProbe.currentHolders()
-                let reports = scanner.inventory().map { worktree in
+                let inventory = scanner.scan()
+                let reports = inventory.worktrees.map { worktree in
                     WorktreeReport(
                         worktree: worktree,
                         verdict: scanner.verdict(
@@ -205,11 +212,12 @@ final class AppModel: ObservableObject {
                         )
                     )
                 }
-                return (reports, unreadable)
+                return (reports, unreadable, inventory.failures)
             }.value
 
             guard !Task.isCancelled, let self else { return }
             self.unreadableRoots = unreadable
+            self.scanFailures = failures
             let previous = Dictionary(uniqueKeysWithValues: self.reports.map { ($0.id, $0) })
             self.reports = fresh.map { report in
                 guard let old = previous[report.id] else { return report }
