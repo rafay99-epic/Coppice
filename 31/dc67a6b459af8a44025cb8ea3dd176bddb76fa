@@ -1,0 +1,27 @@
+apps/desktop/Sources/Coppice/Views/Theme.swift
+  s_3e3dfec32bf217::t_188ca11a374bca 76-77,99-100
+apps/desktop/Sources/Coppice/Views/MenuBarView.swift
+  s_3e3dfec32bf217::t_188ca11a374bca 151,165
+apps/desktop/Sources/Coppice/Views/InspectorView.swift
+  s_3e3dfec32bf217::t_188ca11a374bca 138,319
+apps/desktop/Sources/Coppice/Views/ActivityViews.swift
+  s_3e3dfec32bf217::t_188ca11a374bca 67,77
+apps/desktop/Sources/Coppice/Views/OnboardingView.swift
+  s_3e3dfec32bf217::t_188ca11a374bca 127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "31dc67a6b459af8a44025cb8ea3dd176bddb76fa",
+  "prompts": {},
+  "sessions": {
+    "s_3e3dfec32bf217": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fc78b36b-49ba-4f4d-b965-573ed26d3610",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
