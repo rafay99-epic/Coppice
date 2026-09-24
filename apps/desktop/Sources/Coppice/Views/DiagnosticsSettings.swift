@@ -110,6 +110,7 @@ struct DiagnosticsSettings: View {
                 cpu: cpu,
                 uptime: Date().timeIntervalSince(Telemetry.shared.launchedAt)
             )
+            .containerValue(\.spansSettingsColumns, true)
 
             SettingsSection(title: "Last scan", footer: scanSummary) {
                 if let scan = telemetry.lastScan {

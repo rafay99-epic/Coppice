@@ -34,15 +34,63 @@ struct SettingsPaneView: View {
     }
 }
 
+extension ContainerValues {
+    @Entry var spansSettingsColumns = false
+}
+
+private struct SectionRow: Identifiable {
+    let sections: [Subview]
+    let spans: Bool
+
+    var id: Subview.ID { sections[0].id }
+
+    static func rows(of sections: SubviewsCollection, columns: Int) -> [SectionRow] {
+        var rows: [SectionRow] = []
+        var pending: [Subview] = []
+        for section in sections {
+            if section.containerValues.spansSettingsColumns {
+                if !pending.isEmpty { rows.append(SectionRow(sections: pending, spans: false)) }
+                pending = []
+                rows.append(SectionRow(sections: [section], spans: true))
+                continue
+            }
+            pending.append(section)
+            if pending.count == columns {
+                rows.append(SectionRow(sections: pending, spans: false))
+                pending = []
+            }
+        }
+        if !pending.isEmpty { rows.append(SectionRow(sections: pending, spans: false)) }
+        return rows
+    }
+}
+
 struct SettingsForm<Content: View>: View {
     @ViewBuilder let content: Content
+    @State private var width = CGFloat.infinity
+
+    private var columns: Int { width >= 880 ? 2 : 1 }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Space.xxl) { content }
-                .padding(.horizontal, Space.xl)
-                .padding(.vertical, Space.l)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Group(subviews: content) { sections in
+                VStack(alignment: .leading, spacing: Space.xxl) {
+                    ForEach(SectionRow.rows(of: sections, columns: columns)) { row in
+                        HStack(alignment: .top, spacing: Space.xxl + Space.s) {
+                            ForEach(row.sections) { section in
+                                section.frame(maxWidth: .infinity, alignment: .topLeading)
+                            }
+                            if !row.spans, row.sections.count < columns {
+                                Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, Space.xl)
+            .padding(.vertical, Space.l)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         }
         .background(.black)
         .toggleStyle(.mono)
