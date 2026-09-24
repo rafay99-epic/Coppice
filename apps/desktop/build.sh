@@ -54,6 +54,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BINARY" "$APP/Contents/MacOS/$APP_NAME"
 MIN_OS="$(vtool -show-build "$BINARY" | awk '/minos/ {print $2; exit}')"
 SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+if [[ -n "${COPPICE_MIN_SDK:-}" && "${SDK_VERSION%%.*}" -lt "$COPPICE_MIN_SDK" ]]; then
+  echo "error: building against SDK $SDK_VERSION, but releases need SDK $COPPICE_MIN_SDK or newer" >&2
+  exit 1
+fi
 vtool -set-build-version macos "$MIN_OS" "$SDK_VERSION" -replace -output "$APP/Contents/MacOS/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
 echo "Build version: macOS $MIN_OS, SDK $SDK_VERSION"
 cp Resources/Info.plist "$APP/Contents/Info.plist"

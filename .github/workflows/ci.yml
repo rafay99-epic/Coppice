@@ -20,6 +20,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  COPPICE_MIN_SDK: "27"
+
 defaults:
   run:
     working-directory: apps/desktop
@@ -27,7 +30,7 @@ defaults:
 jobs:
   test:
     name: Test (swift test)
-    runs-on: macos-26
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v7
       - name: Swift version
@@ -53,7 +56,7 @@ jobs:
   package:
     name: Build & package DMG
     if: github.event_name == 'pull_request'
-    runs-on: macos-26
+    runs-on: xcode-27
     needs: [test, lint]
     steps:
       - uses: actions/checkout@v7
@@ -72,7 +75,7 @@ jobs:
     if: >-
       github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: macos-26
+    runs-on: xcode-27
     needs: [test, lint]
     permissions:
       contents: write

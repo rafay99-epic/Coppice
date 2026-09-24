@@ -14,6 +14,9 @@ concurrency:
   group: nightly
   cancel-in-progress: false
 
+env:
+  COPPICE_MIN_SDK: "27"
+
 defaults:
   run:
     working-directory: apps/desktop
@@ -21,7 +24,7 @@ defaults:
 jobs:
   test:
     name: Test (swift test)
-    runs-on: macos-26
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v7
       - name: Configure git identity
@@ -43,7 +46,7 @@ jobs:
 
   publish:
     name: Build and publish nightly
-    runs-on: macos-26
+    runs-on: xcode-27
     needs: [test, lint]
     permissions:
       contents: write
