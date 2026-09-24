@@ -1,0 +1,26 @@
+apps/desktop/Sources/Coppice/Views/MainView.swift
+  s_35c115a0d8ed68::t_9e14f804d83465 147-148,152-153
+  s_35c115a0d8ed68::t_a1397cf832084c 55-59,61-65,67,70-75
+  s_35c115a0d8ed68::t_8e850ddc440d60 439
+  s_35c115a0d8ed68::t_7bc0f081ac682d 401
+  s_35c115a0d8ed68::t_427d8678a1fbde 47
+  s_35c115a0d8ed68::t_1a8d1c6b05fe23 90
+apps/desktop/Sources/Coppice/App/CoppiceApp.swift
+  s_35c115a0d8ed68::t_487340c62d6de9 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "40b935d3f0ff796916fdb7456becf72c42bb32a6",
+  "prompts": {},
+  "sessions": {
+    "s_35c115a0d8ed68": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "54dd74a3-e5dd-4890-bc66-a944ba8d4201",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
