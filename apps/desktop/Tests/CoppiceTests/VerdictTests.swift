@@ -299,6 +299,14 @@ final class VerdictTests: XCTestCase {
         XCTAssertFalse(all.contains { $0.isMain }, "a repository's own checkout can never be acted on, so it is not listed")
     }
 
+    func testWorktreeInsideACodeFolderBelongsToItsRepository() throws {
+        _ = try makeWorktree("one")
+        _ = try makeWorktree("two")
+
+        let paths = Set(scanner.inventory().map(\.repoPath))
+        XCTAssertEqual(paths, [repo.path])
+    }
+
     func testMergedPullRequestClearsCommitsMissingFromDefault() throws {
         let worktree = try makeWorktree("squashed", push: false)
         write("feature.md", "work", in: URL(fileURLWithPath: worktree.path))
