@@ -44,7 +44,7 @@ struct MainView: View {
 
     @State private var scope: Scope = .all
     @State private var showInspector = true
-    @State private var columnVisibility = NavigationSplitViewVisibility.all
+    @State private var showSidebar = true
     @State private var search = ""
     @AppStorage("dismissedDiskAccess") private var dismissedDiskAccess = false
     @FocusState private var listFocused: Bool
@@ -52,14 +52,27 @@ struct MainView: View {
     @State private var dismissedFailures: Set<String> = []
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            sidebar
-                .toolbar(removing: .sidebarToggle)
-        } detail: {
+        HStack(spacing: 0) {
+            if showSidebar {
+                sidebar
+                    .transition(.move(edge: .leading))
+            }
             detail
+            if inspectorVisible {
+                InspectorView()
+                    .frame(width: 330)
+                    .transition(.move(edge: .trailing))
+            }
         }
+        .background(.black)
         .navigationTitle("Coppice")
         .toolbar(removing: .title)
+        .toolbar { toolbar }
+        .sheet(isPresented: $model.confirmingSweep) {
+            SweepSheet(targets: model.sweepCandidates) { targets in
+                Task { await model.sweep(targets) }
+            }
+        }
         .font(.ui)
         .animation(.smooth(duration: 0.35), value: model.settingsPane)
     }
@@ -74,9 +87,9 @@ struct MainView: View {
                     .transition(.move(edge: .leading))
             }
         }
+        .frame(width: 250)
         .clipped()
         .background(.black)
-        .navigationSplitViewColumnWidth(min: 240, ideal: 250, max: 320)
     }
 
     private var scopeSidebar: some View {
@@ -131,25 +144,13 @@ struct MainView: View {
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
-        .frame(minWidth: 360, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
         .background(.black)
-        .toolbar { toolbar }
-        .inspector(isPresented: inspectorVisible) {
-            InspectorView()
-                .inspectorColumnWidth(min: 290, ideal: 330, max: 420)
-        }
-        .sheet(isPresented: $model.confirmingSweep) {
-            SweepSheet(targets: model.sweepCandidates) { targets in
-                Task { await model.sweep(targets) }
-            }
-        }
     }
 
-    private var inspectorVisible: Binding<Bool> {
-        Binding(
-            get: { showInspector && model.settingsPane == nil },
-            set: { showInspector = $0 }
-        )
+    private var inspectorVisible: Bool {
+        showInspector && model.settingsPane == nil
     }
 
     private var worktreeDetail: some View {
@@ -397,7 +398,7 @@ extension MainView {
     var toolbar: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
             Button {
-                withAnimation(.smooth) { columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly }
+                withAnimation(.smooth) { showSidebar.toggle() }
             } label: {
                 Label("Sidebar", systemImage: "sidebar.leading")
             }
@@ -435,7 +436,7 @@ extension MainView {
             .accessibilityLabel("Rescan")
             .help("Rescan every worktree (⌘R)")
 
-            Button { showInspector.toggle() } label: {
+            Button { withAnimation(.smooth) { showInspector.toggle() } } label: {
                 Image(systemName: "sidebar.trailing")
                     .frame(width: 28, height: 28)
                     .contentShape(.rect)
