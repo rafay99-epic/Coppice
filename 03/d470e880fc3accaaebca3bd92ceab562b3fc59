@@ -1,0 +1,84 @@
+apps/desktop/Sources/Coppice/Views/MainView.swift
+  s_b5916b1170314e::t_dea9388bb47562 134
+  s_b5916b1170314e::t_265781fa4b8958 246,287-288,294,601,604-606,608-619,629-630,634,638-650,655,657-658,660-662
+  s_b5916b1170314e::t_cce9a488a11628 141-143,219,659
+  s_b5916b1170314e::t_85beb4647306c1 247
+apps/desktop/Sources/Coppice/Services/WorktreeScanner.swift
+  s_b5916b1170314e::t_94c6c6ae762c67 26-27,30,68-73
+apps/desktop/Tests/CoppiceTests/VerdictTests.swift
+  s_b5916b1170314e::t_94c6c6ae762c67 322-327
+  s_b5916b1170314e::t_142a25b49c5b23 328-329
+  s_b5916b1170314e::t_68544982a08bc7 239-258
+apps/desktop/Sources/Coppice/Views/Theme.swift
+  s_b5916b1170314e::t_31445c02473aa0 126,130
+  s_b5916b1170314e::t_6a6c22f8b0f3b2 117-125,127-129,131-164
+apps/desktop/Sources/Coppice/Views/SweepSheet.swift
+  s_b5916b1170314e::t_d1f22a10c89e6b 1-64
+apps/desktop/Sources/Coppice/Services/Sweeper.swift
+  s_b5916b1170314e::t_576c4a2f9b2f04 12,16,18,24-26,28-30,43,50-51,74,77-78,85,156-159
+apps/desktop/Sources/Coppice/Views/MenuBarView.swift
+  s_b5916b1170314e::t_265781fa4b8958 84
+apps/desktop/Sources/Coppice/Views/InspectorView.swift
+  s_b5916b1170314e::t_cce9a488a11628 304
+apps/desktop/Sources/Coppice/Views/SettingsView.swift
+  s_b5916b1170314e::t_88004a27e3a668 41-50,54,56-57,60-86,109,125,140,162,186,194,207
+apps/desktop/Sources/Coppice/Models/AppModel.swift
+  s_b5916b1170314e::t_934b65a8037362 9,24,26,31-32,46-65,103,124,153-168,411-412,429,441,466-467,489-499,506-511,515-522,540-550,558-571,573
+  s_b5916b1170314e::t_d1f22a10c89e6b 430-431,537-539,551-554,574
+  s_b5916b1170314e::t_0ef7b6e969a092 450
+  s_b5916b1170314e::t_ecac678ac3df73 555-557,572
+  s_b5916b1170314e::t_e1c5a459a1c28f 84,97-99,107,196-197,207,213,248,251,253-254,256-266,268,270-272,276-277,279,299,379,382,575-613
+apps/desktop/Sources/Coppice/Views/ActivityViews.swift
+  s_b5916b1170314e::t_cce9a488a11628 23
+  s_b5916b1170314e::t_aa8e3725fb61a9 123-172
+  s_b5916b1170314e::t_c362b8498a1d87 43,63-73
+apps/desktop/Sources/Coppice/Services/Telemetry.swift
+  s_b5916b1170314e::t_8538a6c9182e6e 131-132
+  s_b5916b1170314e::t_99fae467a32517 64,79-84,209
+  s_b5916b1170314e::t_28113bf52d2bfb 1-63,65-78,85-130,133-208,210-260
+apps/desktop/Sources/Coppice/Views/DiagnosticsSettings.swift
+  s_b5916b1170314e::t_d525d68b42c61b 18-19,23-24,29,32-34,40,44,58-59,64-68,71-78,87-92,94-95,97-100,107-119,123-129,131,135-209,213-228,230-269,278,285-312
+  s_b5916b1170314e::t_8538a6c9182e6e 69-70,79-81,334-335,350-351,356-357
+  s_b5916b1170314e::t_ae5730ae099ccd 270-277,279-284
+  s_b5916b1170314e::t_4279435a0b06ce 313-333,336-349,352-355,359-361
+apps/desktop/Sources/Coppice/Services/CrashReports.swift
+  s_b5916b1170314e::t_4af6d874b26f07 13,20,28-31,33-34,65-69,113-114,123,132-139
+  s_b5916b1170314e::t_5dd63178502dab 1-12,14-19,21-27,32,35-64,70-112,115-122,124-131,140-246
+apps/desktop/Sources/Coppice/Services/Shell.swift
+  s_b5916b1170314e::t_aa434b81148b8f 38,77-81
+apps/desktop/Tests/CoppiceTests/ParsingTests.swift
+  s_b5916b1170314e::t_99fae467a32517 321-341
+  s_b5916b1170314e::t_8538a6c9182e6e 378-381
+  s_b5916b1170314e::t_6dad240fd86fe7 305-320,342-377,382-390
+apps/desktop/Sources/Coppice/Services/DiagnosticsExport.swift
+  s_b5916b1170314e::t_f8249149f622d7 11-14
+  s_b5916b1170314e::t_1f4ba96fd23f5f 24,31
+  s_b5916b1170314e::t_5c99b027708815 1-10,15-23,25-30,32-53
+apps/desktop/Sources/Coppice/App/CoppiceApp.swift
+  s_b5916b1170314e::t_c362b8498a1d87 114-125
+apps/desktop/Sources/Coppice/Services/AppSettings.swift
+  s_b5916b1170314e::t_5c99b027708815 69
+apps/desktop/Sources/Coppice/Views/DiagnosticsParts.swift
+  s_b5916b1170314e::t_13d9f9745f5816 50
+  s_b5916b1170314e::t_113c18cba8c176 1-49,51-188
+apps/desktop/Sources/Coppice/Views/CrashesSheet.swift
+  s_b5916b1170314e::t_fb04f69ee60950 1-185
+apps/desktop/Sources/Coppice/Updates/Updater.swift
+  s_b5916b1170314e::t_c362b8498a1d87 36-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "03d470e880fc3accaaebca3bd92ceab562b3fc59",
+  "prompts": {},
+  "sessions": {
+    "s_b5916b1170314e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "88b5662d-d049-46be-a63d-862d094fbbfe",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
