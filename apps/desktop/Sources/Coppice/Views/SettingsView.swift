@@ -185,19 +185,31 @@ private struct GeneralSettings: View {
                 }
             }
 
-            SettingsSection(title: "Updates") {
+            SettingsSection(title: "Updates", footer: updateFooter) {
                 Toggle("Check for updates automatically", isOn: $settings.autoUpdateCheck)
                 LabeledContent("Status") {
                     HStack(spacing: Space.m) {
                         Text(updater.statusText)
                             .foregroundStyle(.secondary)
                             .numeric(updater.statusText)
-                        Button("Check now") { Task { await updater.checkNow() } }
-                            .disabled(updater.isBusy || !Channel.current.updatesEnabled)
+                        if case .available = updater.status {
+                            Button("Install") { updater.installUpdate() }
+                                .buttonStyle(.mono)
+                        } else {
+                            Button("Check now") { Task { await updater.checkNow() } }
+                                .disabled(updater.isBusy || !Channel.current.updatesEnabled)
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+extension GeneralSettings {
+    var updateFooter: String? {
+        guard Channel.current.updatesEnabled else { return nil }
+        return "Installs with \(UpdateInstaller.method().label), then Coppice reopens."
     }
 }
 
