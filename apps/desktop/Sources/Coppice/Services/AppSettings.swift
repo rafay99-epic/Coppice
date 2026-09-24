@@ -66,7 +66,7 @@ final class AppSettings: ObservableObject {
     }
 }
 
-enum Channel: String, Sendable {
+enum Channel: String, Sendable, CaseIterable {
     case stable, nightly, dev
 
     static var current: Channel {

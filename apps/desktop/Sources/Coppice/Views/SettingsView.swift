@@ -34,29 +34,104 @@ struct SettingsPaneView: View {
     }
 }
 
-struct SettingsForm<Content: View>: View {
-    @ViewBuilder let content: Content
+extension ContainerValues {
+    @Entry var spansSettingsColumns = false
+}
 
-    var body: some View {
-        Form { content }
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-            .background(.black)
-            .contentMargins(.horizontal, Space.xl, for: .scrollContent)
-            .contentMargins(.vertical, Space.l, for: .scrollContent)
+private struct SectionRow: Identifiable {
+    let sections: [Subview]
+    let spans: Bool
+
+    var id: Subview.ID { sections[0].id }
+
+    static func rows(of sections: SubviewsCollection, columns: Int) -> [SectionRow] {
+        var rows: [SectionRow] = []
+        var pending: [Subview] = []
+        for section in sections {
+            if section.containerValues.spansSettingsColumns {
+                if !pending.isEmpty { rows.append(SectionRow(sections: pending, spans: false)) }
+                pending = []
+                rows.append(SectionRow(sections: [section], spans: true))
+                continue
+            }
+            pending.append(section)
+            if pending.count == columns {
+                rows.append(SectionRow(sections: pending, spans: false))
+                pending = []
+            }
+        }
+        if !pending.isEmpty { rows.append(SectionRow(sections: pending, spans: false)) }
+        return rows
     }
 }
 
-struct SettingsHeader: View {
-    let title: String
+struct SettingsForm<Content: View>: View {
+    @ViewBuilder let content: Content
+    @State private var width = CGFloat.infinity
+
+    private var columns: Int { width >= 880 ? 2 : 1 }
 
     var body: some View {
-        Text(title)
-            .font(.heading(17))
-            .foregroundStyle(.primary)
-            .textCase(nil)
-            .padding(.top, Space.s)
-            .padding(.bottom, Space.xs)
+        ScrollView {
+            Group(subviews: content) { sections in
+                VStack(alignment: .leading, spacing: Space.xxl) {
+                    ForEach(SectionRow.rows(of: sections, columns: columns)) { row in
+                        HStack(alignment: .top, spacing: Space.xxl + Space.s) {
+                            ForEach(row.sections) { section in
+                                section.frame(maxWidth: .infinity, alignment: .topLeading)
+                            }
+                            if !row.spans, row.sections.count < columns {
+                                Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, Space.xl)
+            .padding(.vertical, Space.l)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        }
+        .background(.black)
+        .toggleStyle(.mono)
+        .buttonStyle(.quiet)
+        .labeledContentStyle(SettingsRowStyle())
+    }
+}
+
+struct SettingsSection<Content: View>: View {
+    let title: String
+    var footer: String?
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.heading(17))
+                .padding(.bottom, Space.xs)
+            Group(subviews: content) { rows in
+                ForEach(rows) { row in
+                    row.padding(.vertical, Space.s)
+                    if row.id != rows.last?.id {
+                        Divider().opacity(0.5)
+                    }
+                }
+            }
+            if let footer {
+                Hint(footer).padding(.top, Space.xs)
+            }
+        }
+    }
+}
+
+struct SettingsRowStyle: LabeledContentStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: Space.m) {
+            configuration.label
+            Spacer(minLength: Space.m)
+            configuration.content
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -79,7 +154,7 @@ private struct GeneralSettings: View {
 
     var body: some View {
         SettingsForm {
-            Section {
+            SettingsSection(title: "Menu bar", footer: "Dock changes apply the next time Coppice opens.") {
                 Toggle("Show reclaimable space", isOn: $settings.showSizeInMenuBar)
                 LabeledContent("Show from") {
                     HStack(spacing: Space.m) {
@@ -93,13 +168,9 @@ private struct GeneralSettings: View {
                 }
                 .disabled(!settings.showSizeInMenuBar)
                 Toggle("Show Coppice in the Dock", isOn: $settings.showsDockIcon)
-            } header: {
-                SettingsHeader(title: "Menu bar")
-            } footer: {
-                Hint("Dock changes apply the next time Coppice opens.")
             }
 
-            Section {
+            SettingsSection(title: "Safety") {
                 Toggle("Save .env files before removing", isOn: $settings.rescueIgnoredConfig)
                 LabeledContent("Saved to") {
                     Button(settings.rescueDirectory.lastPathComponent) {
@@ -112,11 +183,9 @@ private struct GeneralSettings: View {
                     .buttonStyle(.link)
                     .foregroundStyle(.primary)
                 }
-            } header: {
-                SettingsHeader(title: "Safety")
             }
 
-            Section {
+            SettingsSection(title: "Updates") {
                 Toggle("Check for updates automatically", isOn: $settings.autoUpdateCheck)
                 LabeledContent("Status") {
                     HStack(spacing: Space.m) {
@@ -127,8 +196,6 @@ private struct GeneralSettings: View {
                             .disabled(updater.isBusy || !Channel.current.updatesEnabled)
                     }
                 }
-            } header: {
-                SettingsHeader(title: "Updates")
             }
         }
     }
@@ -140,7 +207,7 @@ private struct ScanningSettings: View {
 
     var body: some View {
         SettingsForm {
-            Section {
+            SettingsSection(title: "Code folders", footer: "Agent worktree folders are always scanned.") {
                 ForEach(settings.codeRoots, id: \.self) { root in
                     HStack(spacing: Space.m) {
                         Image(systemName: "folder")
@@ -162,23 +229,17 @@ private struct ScanningSettings: View {
                     }
                 }
                 Button("Add folder…") { addRoot() }
-            } header: {
-                SettingsHeader(title: "Code folders")
-            } footer: {
-                Hint("Agent worktree folders are always scanned.")
             }
 
-            Section {
+            SettingsSection(title: "Agents") {
                 ForEach(Harness.allCases, id: \.self) { harness in
                     Toggle(isOn: harnessBinding(harness)) {
                         Label(harness.displayName, systemImage: harness.symbol)
                     }
                 }
-            } header: {
-                SettingsHeader(title: "Agents")
             }
 
-            Section {
+            SettingsSection(title: "Pull requests", footer: "A merged pull request marks a branch as finished.") {
                 Toggle("Check pull request status", isOn: $settings.checkPullRequests)
                     .disabled(!model.canCheckPullRequests)
                 if model.canCheckPullRequests {
@@ -189,13 +250,9 @@ private struct ScanningSettings: View {
                 } else {
                     Hint("Needs the GitHub CLI (gh).")
                 }
-            } header: {
-                SettingsHeader(title: "Pull requests")
-            } footer: {
-                Hint("A merged pull request marks a branch as finished.")
             }
 
-            Section {
+            SettingsSection(title: "Sessions") {
                 LabeledContent("Recent session") {
                     HStack(spacing: Space.m) {
                         Slider(value: $settings.recentSessionHours, in: 1...168, step: 1)
@@ -209,8 +266,6 @@ private struct ScanningSettings: View {
                 LabeledContent("Scan") {
                     Button("Rescan now") { model.settingsChanged() }
                 }
-            } header: {
-                SettingsHeader(title: "Sessions")
             }
         }
     }

@@ -111,6 +111,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        LaunchRecord.end()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        Telemetry.shared.startWatchdog()
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        Telemetry.shared.stopWatchdog()
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         NotificationCenter.default.post(name: Self.showWindow, object: nil)
         return true

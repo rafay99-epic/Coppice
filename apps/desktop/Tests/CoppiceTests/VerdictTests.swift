@@ -236,6 +236,26 @@ final class VerdictTests: XCTestCase {
         )
     }
 
+    func testSweepReportsWhatEachWorktreeFreed() throws {
+        let reports = try ["first", "second"].map { name in
+            let worktree = try makeWorktree(name)
+            let url = URL(fileURLWithPath: worktree.path)
+            write("package.json", "{}", in: url)
+            write("node_modules/pkg/index.js", String(repeating: "x", count: 50_000), in: url)
+            return WorktreeReport(worktree: worktree, verdict: .safe)
+        }
+
+        var updates: [Sweeper.Progress] = []
+        let outcome = Sweeper.sweep(reports: reports, scanner: scanner) { updates.append($0) }
+
+        XCTAssertEqual(Set(outcome.freed.keys), Set(reports.map(\.id)))
+        XCTAssertTrue(outcome.freed.values.allSatisfy { $0 > 0 }, "\(outcome.freed)")
+        XCTAssertEqual(updates.first?.current, reports[0].id)
+        XCTAssertEqual(updates.last?.completed, 2)
+        XCTAssertNil(updates.last?.current)
+        XCTAssertEqual(updates.last?.freed, outcome.freed)
+    }
+
     func testRemovalIsRefusedWhenStateChangedAfterTheScan() throws {
         let worktree = try makeWorktree("raced")
 
@@ -297,6 +317,14 @@ final class VerdictTests: XCTestCase {
         XCTAssertTrue(names.contains("one"))
         XCTAssertTrue(names.contains("two"))
         XCTAssertFalse(all.contains { $0.isMain }, "a repository's own checkout can never be acted on, so it is not listed")
+    }
+
+    func testWorktreeInsideACodeFolderBelongsToItsRepository() throws {
+        _ = try makeWorktree("one")
+        _ = try makeWorktree("two")
+
+        let paths = Set(scanner.inventory().map(\.repoPath))
+        XCTAssertEqual(paths, [repo.path])
     }
 
     func testMergedPullRequestClearsCommitsMissingFromDefault() throws {

@@ -6,7 +6,7 @@ enum Activity: Equatable {
     case scanning
     case sweeping(Sweeper.Progress)
     case pruning(repositories: Int)
-    case removing(name: String)
+    case removing(path: String)
 
     var isBusy: Bool { self != .idle }
 
@@ -21,21 +21,15 @@ enum Activity: Equatable {
         switch self {
         case .idle: return ""
         case .scanning: return "Scanning worktrees"
-        case .sweeping: return "Sweeping build artifacts"
+        case .sweeping(let progress): return "Sweeping \(min(progress.completed + 1, progress.total)) of \(progress.total)"
         case .pruning(let count): return "Pruning \(count) repositor\(count == 1 ? "y" : "ies")"
-        case .removing(let name): return "Removing \(name)"
+        case .removing(let path): return "Moving \((path as NSString).lastPathComponent) to the Trash"
         }
     }
 
     var detail: String? {
-        switch self {
-        case .sweeping(let progress):
-            guard progress.total > 0 else { return nil }
-            let position = "\(min(progress.completed + 1, progress.total)) of \(progress.total)"
-            if progress.currentName.isEmpty { return position }
-            return "\(position) · \(progress.currentName)"
-        default: return nil
-        }
+        guard case .sweeping(let progress) = self, let current = progress.current else { return nil }
+        return (current as NSString).lastPathComponent
     }
 
     var fraction: Double? {
@@ -49,15 +43,33 @@ enum Activity: Equatable {
     }
 }
 
+struct RowStatus: Equatable {
+    var tag: String?
+    var dimmed = false
+    var progress: Double?
+    var freed: Int64 = 0
+    var freedInFlight: Int64 = 0
+}
+
+struct Receipt: Equatable {
+    enum Follow: Equatable {
+        case log
+        case trash(URL)
+    }
+
+    let headline: String
+    var detail: String?
+    var follow: Follow?
+    var freed: [String: Int64] = [:]
+}
+
 struct Banner: Identifiable, Equatable {
     enum Kind: Equatable {
-        case success
         case warning
         case failure
 
         var symbol: String {
             switch self {
-            case .success: return "checkmark.circle.fill"
             case .warning: return "exclamationmark.triangle.fill"
             case .failure: return "xmark.octagon.fill"
             }
@@ -69,6 +81,7 @@ struct Banner: Identifiable, Equatable {
     let title: String
     let message: String
     var details: [Sweeper.Item] = []
+    var opensCrashes = false
 }
 
 struct RepoGroup {
@@ -81,13 +94,17 @@ struct RepoGroup {
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var reports: [WorktreeReport] = []
-    @Published private(set) var activity: Activity = .idle
+    @Published private(set) var activity: Activity = .idle {
+        didSet { Telemetry.shared.setActivity(activity.title) }
+    }
     @Published private(set) var lastScan: Date?
     @Published private(set) var detectedHarnesses: [Harness] = []
     @Published var banner: Banner?
+    @Published private(set) var receipt: Receipt?
     @Published var selection: String?
     @Published var confirmingSweep = false
     @Published var settingsPane: SettingsPane?
+    @Published var showingCrashes = false
     @Published private(set) var unreadableRoots: [String] = []
     @Published private(set) var scanFailures: [Sweeper.Item] = []
 
@@ -104,6 +121,7 @@ final class AppModel: ObservableObject {
     private var measureTask: Task<Void, Never>?
     private var scheduler = ScanScheduler()
     private var pullRequestTask: Task<Void, Never>?
+    private var receiptTask: Task<Void, Never>?
     private var lastPullRequestFetch: Date?
     private var pullRequestRepos: Set<String> = []
     private static let pullRequestRefreshInterval: TimeInterval = 600
@@ -132,6 +150,22 @@ final class AppModel: ObservableObject {
     }
     var selectedReport: WorktreeReport? { visibleReports.first { $0.id == selection } }
 
+    func rowStatus(_ report: WorktreeReport) -> RowStatus {
+        switch activity {
+        case .sweeping(let progress):
+            guard let index = progress.paths.firstIndex(of: report.id) else { return RowStatus() }
+            let freed = progress.freed[report.id] ?? 0
+            if index > progress.completed { return RowStatus(tag: "queued") }
+            if index < progress.completed { return RowStatus(freed: freed, freedInFlight: freed) }
+            let fraction = report.artifactBytes > 0 ? min(Double(freed) / Double(report.artifactBytes), 1) : 0
+            return RowStatus(tag: "sweeping", dimmed: true, progress: fraction, freedInFlight: freed)
+        case .removing(let path) where path == report.id:
+            return RowStatus(tag: "moving to Trash", dimmed: true)
+        default:
+            return RowStatus(freed: receipt?.freed[report.id] ?? 0)
+        }
+    }
+
     var groups: [RepoGroup] {
         let grouped = Dictionary(grouping: visibleReports) { $0.worktree.repoPath }
         return grouped.map { path, items in
@@ -159,6 +193,8 @@ final class AppModel: ObservableObject {
     func start() {
         guard !hasStarted else { return }
         hasStarted = true
+        Telemetry.shared.startSampling()
+        if let previous = LaunchRecord.begin() { reportCrash(since: previous) }
         rescan()
         restartWatcher()
     }
@@ -168,11 +204,13 @@ final class AppModel: ObservableObject {
         let scanner = self.scanner
         var paths = scanner.agentWorktreeRoots().map(\.root.path)
         paths += settings.codeRoots.map(\.path).filter { FileManager.default.fileExists(atPath: $0) }
+        Telemetry.shared.watching(folders: paths.count)
         guard !paths.isEmpty else { return }
 
         let agentRoots = scanner.agentWorktreeRoots().map(\.root.path)
         let isRelevant: @Sendable (String) -> Bool = { ScanScheduler.isWorktreeChange($0, agentRoots: agentRoots) }
         watcher = DirectoryWatcher(paths: paths, isRelevant: isRelevant) { [weak self] in
+            Telemetry.shared.noticedChange()
             Task { @MainActor in self?.requestScan(automatic: true) }
         }
         watcher?.start()
@@ -207,35 +245,38 @@ final class AppModel: ObservableObject {
         let scanner = self.scanner
         let merged = Set(reports.filter(\.mergedAtHead).map(\.id))
         scanTask = Task { [weak self] in
-            let (fresh, unreadable, failures) = await Task.detached(priority: .utility) {
-                () -> ([WorktreeReport], [String], [Sweeper.Item]) in
+            let output = await Task.detached(priority: .utility) { () -> ScanOutput in
                 guard FileManager.default.isExecutableFile(atPath: Git.executable) else {
                     Log.shared.error("git not found at \(Git.executable)")
-                    return ([], [], [Sweeper.Item(path: Git.executable, reason: "Install the Xcode Command Line Tools")])
+                    return ScanOutput(failures: [Sweeper.Item(path: Git.executable, reason: "Install the Xcode Command Line Tools")])
                 }
+                let commandsBefore = Telemetry.shared.commands
+                var clock = PhaseClock()
                 let files = FileManager.default
-                let unreadable = (scanner.codeRoots.map(\.path) + scanner.agentWorktreeRoots().map(\.root.path))
-                    .filter { files.fileExists(atPath: $0) && (try? files.contentsOfDirectory(atPath: $0)) == nil }
-                let holders = ProcessProbe.currentHolders()
-                let inventory = scanner.scan()
-                let reports = inventory.worktrees.map { worktree in
-                    WorktreeReport(
-                        worktree: worktree,
-                        verdict: scanner.verdict(
-                            for: worktree,
-                            holders: holders,
-                            prMerged: merged.contains(worktree.path)
-                        )
-                    )
+                let unreadable = clock.measure("Check folders") {
+                    (scanner.codeRoots.map(\.path) + scanner.agentWorktreeRoots().map(\.root.path))
+                        .filter { files.fileExists(atPath: $0) && (try? files.contentsOfDirectory(atPath: $0)) == nil }
                 }
-                return (reports, unreadable, inventory.failures)
+                let holders = clock.measure("Process probe") { ProcessProbe.currentHolders() }
+                let inventory = clock.measure("Find worktrees") { scanner.scan() }
+                let reports = clock.measure("Status checks \u{00d7}\(inventory.worktrees.count)") {
+                    inventory.worktrees.map { worktree in
+                        WorktreeReport(
+                            worktree: worktree,
+                            verdict: scanner.verdict(for: worktree, holders: holders, prMerged: merged.contains(worktree.path))
+                        )
+                    }
+                }
+                let timing = Telemetry.Scan(date: Date(), phases: clock.phases, commands: Telemetry.shared.commands - commandsBefore)
+                Telemetry.shared.record(scan: timing)
+                return ScanOutput(reports: reports, unreadable: unreadable, failures: inventory.failures, timing: timing)
             }.value
 
             guard !Task.isCancelled, let self else { return }
-            self.unreadableRoots = unreadable
-            self.scanFailures = failures
+            self.unreadableRoots = output.unreadable
+            self.scanFailures = output.failures
             let previous = Dictionary(uniqueKeysWithValues: self.reports.map { ($0.id, $0) })
-            self.reports = fresh.map { report in
+            self.reports = output.reports.map { report in
                 guard let old = previous[report.id] else { return report }
                 var merged = report
                 merged.pullRequest = old.pullRequest
@@ -255,6 +296,7 @@ final class AppModel: ObservableObject {
             Log.shared.write(
                 "scan: \(self.visibleReports.count) worktrees, "
                 + "\(self.hasWorkCount) with work, \(self.groups.count) repos"
+                + (output.timing.map { " in \(Telemetry.format($0.seconds)), \($0.commands) commands" } ?? "")
             )
             self.measureSizes()
             let repos = Set(self.reports.map(\.worktree.repoPath))
@@ -334,8 +376,10 @@ final class AppModel: ObservableObject {
         guard !targets.isEmpty else { isMeasuring = false; return }
 
         isMeasuring = true
+        let started = Date()
         measureTask = Task { [weak self] in
             defer { if !Task.isCancelled { self?.isMeasuring = false } }
+            defer { if !Task.isCancelled { Telemetry.shared.record(sizing: Date().timeIntervalSince(started), count: targets.count) } }
             for path in targets {
                 if Task.isCancelled { return }
                 let measurement = await Task.detached(priority: .background) {
@@ -364,9 +408,8 @@ final class AppModel: ObservableObject {
     func sweep(_ targets: [WorktreeReport]) async {
         guard !targets.isEmpty, interruptScan() else { return }
         banner = nil
-        activity = .sweeping(
-            Sweeper.Progress(completed: 0, total: targets.count, currentName: "", freedBytes: 0)
-        )
+        show(nil)
+        activity = .sweeping(Sweeper.Progress(paths: targets.map(\.id)))
 
         let scanner = self.scanner
         let outcome = await Task.detached(priority: .userInitiated) { [weak self] in
@@ -383,8 +426,9 @@ final class AppModel: ObservableObject {
             )
         }.value
 
-        banner = Self.banner(for: outcome, verb: "Swept", noun: "build artifacts")
-        markUnmeasured(targets.map(\.worktree.path))
+        apply(outcome)
+        banner = Banner.sweep(outcome)
+        show(Receipt.sweep(outcome))
         activity = .idle
         rescan()
     }
@@ -394,6 +438,7 @@ final class AppModel: ObservableObject {
             .filter { repository == nil || $0 == repository }
         guard !repos.isEmpty, interruptScan() else { return }
         banner = nil
+        show(nil)
         activity = .pruning(repositories: repos.count)
 
         let outcome = await Task.detached(priority: .userInitiated) {
@@ -402,11 +447,7 @@ final class AppModel: ObservableObject {
 
         if outcome.failures.isEmpty {
             let count = outcome.removedPaths.count
-            banner = Banner(
-                kind: .success,
-                title: "Pruned stale worktrees",
-                message: "Cleared metadata in \(count) repositor\(count == 1 ? "y" : "ies"). Nothing on disk was touched."
-            )
+            show(Receipt(headline: "Pruned \(count) repositor\(count == 1 ? "y" : "ies")", detail: "· nothing on disk was touched"))
         } else {
             banner = Banner(
                 kind: .failure,
@@ -422,7 +463,8 @@ final class AppModel: ObservableObject {
     func remove(_ report: WorktreeReport, deleteBranch: Bool) async {
         guard interruptScan() else { return }
         banner = nil
-        activity = .removing(name: report.worktree.name)
+        show(nil)
+        activity = .removing(path: report.id)
 
         let scanner = self.scanner
         let rescue = settings.rescueIgnoredConfig ? settings.rescueDirectory : nil
@@ -444,58 +486,41 @@ final class AppModel: ObservableObject {
                 details: outcome.failures
             )
         } else {
-            banner = Banner(
-                kind: outcome.failures.isEmpty ? .success : .warning,
-                title: "Moved \(report.worktree.name) to the Trash",
-                message: "Freed \(Format.bytes(outcome.freedBytes)). Restore it from the Trash if you need it.",
-                details: outcome.failures + outcome.skipped
-            )
+            reports.removeAll { $0.id == report.id }
+            show(Receipt(headline: "Freed \(Format.bytes(outcome.freedBytes))", follow: outcome.trashed.map(Receipt.Follow.trash)))
+            if outcome.hasProblems {
+                let count = outcome.failures.count + outcome.skipped.count
+                banner = Banner(
+                    kind: .warning,
+                    title: "Moved \(report.worktree.name) to the Trash",
+                    message: "\(count) follow-up step\(count == 1 ? "" : "s") did not finish.",
+                    details: outcome.failures + outcome.skipped
+                )
+            }
         }
         selection = nil
         activity = .idle
         rescan()
     }
 
-    private func markUnmeasured(_ paths: [String]) {
-        for path in paths {
-            guard let index = reports.firstIndex(where: { $0.worktree.path == path }) else { continue }
-            reports[index].measured = false
+    private func apply(_ outcome: Sweeper.Outcome) {
+        let removed = Set(outcome.removedPaths)
+        for index in reports.indices {
+            guard let freed = outcome.freed[reports[index].id] else { continue }
+            reports[index].artifactBytes = max(0, reports[index].artifactBytes - freed)
+            reports[index].artifacts.removeAll { removed.contains($0.path) }
         }
     }
 
-    static func banner(for outcome: Sweeper.Outcome, verb: String, noun: String) -> Banner {
-        if !outcome.failures.isEmpty && !outcome.didAnything {
-            return Banner(
-                kind: .failure,
-                title: "Could not \(verb.lowercased()) \(noun)",
-                message: "\(outcome.failures.count) item\(outcome.failures.count == 1 ? "" : "s") could not be deleted.",
-                details: outcome.failures
-            )
+    private func show(_ next: Receipt?) {
+        receiptTask?.cancel()
+        receipt = next
+        guard next != nil else { return }
+        receiptTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled else { return }
+            self?.receipt = nil
         }
-        if outcome.hasProblems {
-            var parts: [String] = []
-            if !outcome.skipped.isEmpty { parts.append("\(outcome.skipped.count) skipped") }
-            if !outcome.failures.isEmpty { parts.append("\(outcome.failures.count) failed") }
-            return Banner(
-                kind: .warning,
-                title: "\(verb) \(Format.bytes(outcome.freedBytes))",
-                message: parts.joined(separator: ", ") + ". Everything else was removed.",
-                details: outcome.failures + outcome.skipped
-            )
-        }
-        if !outcome.didAnything {
-            return Banner(
-                kind: .success,
-                title: "Nothing to \(verb.lowercased())",
-                message: "No \(noun) were found to remove."
-            )
-        }
-        return Banner(
-            kind: .success,
-            title: "\(verb) \(Format.bytes(outcome.freedBytes))",
-            message: "Removed \(outcome.removedPaths.count) folder"
-                + "\(outcome.removedPaths.count == 1 ? "" : "s"). Reinstall to bring them back."
-        )
     }
 
     func openSettings(_ pane: SettingsPane = .general) {
@@ -507,5 +532,82 @@ final class AppModel: ObservableObject {
         restartWatcher()
         detectedHarnesses = Harness.detected(home: FileManager.default.homeDirectoryForCurrentUser)
         rescan()
+    }
+}
+
+extension Receipt {
+    static func sweep(_ outcome: Sweeper.Outcome) -> Receipt? {
+        if outcome.didAnything {
+            let count = outcome.freed.count
+            return Receipt(
+                headline: "Freed \(Format.bytes(outcome.freedBytes))",
+                detail: "from \(count) worktree\(count == 1 ? "" : "s")",
+                follow: .log,
+                freed: outcome.freed
+            )
+        }
+        return outcome.hasProblems ? nil : Receipt(headline: "Nothing to sweep", detail: "no build output was found")
+    }
+}
+
+extension Banner {
+    static func sweep(_ outcome: Sweeper.Outcome) -> Banner? {
+        if !outcome.failures.isEmpty && !outcome.didAnything {
+            return Banner(
+                kind: .failure,
+                title: "Could not sweep build artifacts",
+                message: "\(outcome.failures.count) item\(outcome.failures.count == 1 ? "" : "s") could not be deleted.",
+                details: outcome.failures
+            )
+        }
+        guard outcome.hasProblems else { return nil }
+        var parts: [String] = []
+        if !outcome.skipped.isEmpty { parts.append("\(outcome.skipped.count) skipped") }
+        if !outcome.failures.isEmpty { parts.append("\(outcome.failures.count) failed") }
+        return Banner(
+            kind: .warning,
+            title: "Not everything was swept",
+            message: parts.joined(separator: ", ") + (outcome.didAnything ? ". Everything else was removed." : "."),
+            details: outcome.failures + outcome.skipped
+        )
+    }
+}
+
+private struct ScanOutput: Sendable {
+    var reports: [WorktreeReport] = []
+    var unreadable: [String] = []
+    var failures: [Sweeper.Item] = []
+    var timing: Telemetry.Scan?
+}
+
+extension AppModel {
+    var nextAutomaticScan: Date? {
+        scheduler.lastFinished.map { $0.addingTimeInterval(scheduler.minimumInterval) }
+    }
+
+    var nextPullRequestCheck: Date? {
+        lastPullRequestFetch.map { $0.addingTimeInterval(Self.pullRequestRefreshInterval) }
+    }
+
+    func openCrashes() {
+        showingCrashes = true
+        openSettings(.diagnostics)
+    }
+
+    func reportCrash(since previous: Date) {
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            let crash = await Task.detached(priority: .utility) {
+                CrashReports.load(since: previous, limit: 5).first { $0.channel == .current }
+            }.value
+            guard let self, let crash, self.banner == nil else { return }
+            Log.shared.write("last run crashed at \(crash.date.formatted()): \(crash.kind)")
+            self.banner = Banner(
+                kind: .failure,
+                title: "\(Channel.current.displayName) quit unexpectedly at \(crash.date.formatted(date: .omitted, time: .shortened))",
+                message: crash.before.last.map { "Right before: \($0.text)" } ?? "The crash report is saved.",
+                opensCrashes: true
+            )
+        }
     }
 }
