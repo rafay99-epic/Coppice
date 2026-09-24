@@ -1,0 +1,32 @@
+apps/desktop/Sources/Coppice/Views/MenuBarView.swift
+  s_b5916b1170314e::t_00d6486a9073ce 129
+apps/desktop/Sources/Coppice/Updates/Updater.swift
+  s_b5916b1170314e::t_00d6486a9073ce 39,50,141,143-144,146-148,151
+apps/desktop/Sources/Coppice/Views/SettingsView.swift
+  s_b5916b1170314e::t_b35c81c2ef3c2c 188,195-201,209-212
+  s_b5916b1170314e::t_a8f2810081b8ce 213-215
+apps/desktop/Sources/Coppice/App/CoppiceApp.swift
+  s_b5916b1170314e::t_bef0d61f26e66d 74-79
+apps/desktop/Tests/CoppiceTests/UpdateInstallerTests.swift
+  s_b5916b1170314e::t_18cbd81b4a1b33 1-40,43-85
+  s_b5916b1170314e::t_06d0b4e236f568 41-42
+apps/desktop/Sources/Coppice/Updates/UpdateInstaller.swift
+  s_b5916b1170314e::t_4894451fe96669 1-62,64-101,103-104
+  s_b5916b1170314e::t_18cbd81b4a1b33 63,102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fee720d8455b75dd7aceff832af4a1b648ec3375",
+  "prompts": {},
+  "sessions": {
+    "s_b5916b1170314e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "88b5662d-d049-46be-a63d-862d094fbbfe",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
