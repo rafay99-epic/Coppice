@@ -126,7 +126,7 @@ struct MenuBarView: View {
             Text("Version \(release.version) is ready")
                 .font(.uiCallout)
             Spacer(minLength: Space.s)
-            Button("Update") { Task { await updater.installUpdate() } }
+            Button("Update") { updater.installUpdate() }
                 .buttonStyle(.mono)
                 .disabled(updater.isBusy)
         }

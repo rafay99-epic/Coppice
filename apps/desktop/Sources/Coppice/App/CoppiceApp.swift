@@ -71,7 +71,12 @@ struct CoppiceCommands: Commands {
         CommandGroup(replacing: .saveItem) {}
 
         CommandGroup(after: .appInfo) {
-            Button("Check for Updates…") { Task { await updater.checkNow() } }
+            Button("Check for Updates…") {
+                Task {
+                    await updater.checkNow()
+                    if case .available = updater.status { model.openSettings(.general) }
+                }
+            }
                 .disabled(!Channel.current.updatesEnabled || updater.isBusy)
         }
 

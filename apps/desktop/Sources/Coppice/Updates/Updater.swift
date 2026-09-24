@@ -8,7 +8,6 @@ final class Updater: ObservableObject {
         case checking
         case upToDate
         case available(Release)
-        case downloading(Double)
         case installing
         case failed(String)
     }
@@ -37,7 +36,7 @@ final class Updater: ObservableObject {
 
     var isBusy: Bool {
         switch status {
-        case .checking, .downloading, .installing: return true
+        case .checking, .installing: return true
         default: return false
         }
     }
@@ -48,8 +47,7 @@ final class Updater: ObservableObject {
         case .checking: return "Checking…"
         case .upToDate: return "Up to date (\(Self.currentVersion))"
         case .available(let release): return "Version \(release.version) available"
-        case .downloading(let fraction): return "Downloading \(Int(fraction * 100))%"
-        case .installing: return "Installing…"
+        case .installing: return "Installing with \(UpdateInstaller.method().label)…"
         case .failed(let message): return message
         }
     }
@@ -140,75 +138,17 @@ final class Updater: ObservableObject {
         return false
     }
 
-    func installUpdate() async {
+    func installUpdate() {
         guard case .available(let release) = status else { return }
-        status = .downloading(0)
+        let method = UpdateInstaller.method()
+        status = .installing
         do {
-            let dmg = try await download(release.assetURL)
-            status = .installing
-            try install(dmg: dmg)
-            Log.shared.write("updated to \(release.version); relaunching")
-            relaunch()
+            try UpdateInstaller.start(version: release.version, assetURL: release.assetURL, method: method)
+            Log.shared.write("updating to \(release.version) with \(method.label); Coppice reopens when it is done")
+            NSApplication.shared.terminate(nil)
         } catch {
             status = .failed("Update failed: \(error.localizedDescription)")
-            Log.shared.write("update failed: \(error.localizedDescription)")
-        }
-    }
-
-    private func download(_ url: URL) async throws -> URL {
-        let (temporary, _) = try await URLSession.shared.download(from: url)
-        let destination = FileManager.default.temporaryDirectory
-            .appending(path: "Coppice-update-\(UUID().uuidString).dmg")
-        try FileManager.default.moveItem(at: temporary, to: destination)
-        return destination
-    }
-
-    private func install(dmg: URL) throws {
-        let mountPoint = FileManager.default.temporaryDirectory
-            .appending(path: "coppice-mount-\(UUID().uuidString)")
-
-        let attach = Shell.run("/usr/bin/hdiutil", [
-            "attach", dmg.path, "-nobrowse", "-noautoopen", "-mountpoint", mountPoint.path,
-        ], timeout: 120)
-        guard attach.succeeded else {
-            throw NSError(domain: "Coppice.Updater", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "Could not open the downloaded image.",
-            ])
-        }
-        defer {
-            _ = Shell.run("/usr/bin/hdiutil", ["detach", mountPoint.path, "-force"], timeout: 60)
-            try? FileManager.default.removeItem(at: dmg)
-        }
-
-        let source = mountPoint.appending(path: "\(Channel.current.displayName).app")
-        guard FileManager.default.fileExists(atPath: source.path) else {
-            throw NSError(domain: "Coppice.Updater", code: 3, userInfo: [
-                NSLocalizedDescriptionKey: "The image did not contain \(Channel.current.displayName).app.",
-            ])
-        }
-
-        let installPath = Bundle.main.bundlePath
-        let backup = installPath + ".old"
-        try? FileManager.default.removeItem(atPath: backup)
-        if FileManager.default.fileExists(atPath: installPath) {
-            try FileManager.default.moveItem(atPath: installPath, toPath: backup)
-        }
-        let copy = Shell.run("/usr/bin/ditto", [source.path, installPath], timeout: 180)
-        guard copy.succeeded else {
-            try? FileManager.default.moveItem(atPath: backup, toPath: installPath)
-            throw NSError(domain: "Coppice.Updater", code: 4, userInfo: [
-                NSLocalizedDescriptionKey: "Could not install the new version.",
-            ])
-        }
-        try? FileManager.default.removeItem(atPath: backup)
-    }
-
-    private func relaunch() {
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.createsNewApplicationInstance = true
-        let url = URL(fileURLWithPath: Bundle.main.bundlePath)
-        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, _ in
-            Task { @MainActor in NSApplication.shared.terminate(nil) }
+            Log.shared.error("update failed: \(error.localizedDescription)")
         }
     }
 }
