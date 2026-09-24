@@ -302,4 +302,90 @@ final class DiagnosticsTests: XCTestCase {
         XCTAssertEqual(problems.last?.message, "git failed  in ~/Code/app")
         XCTAssertNotNil(problems.first?.date)
     }
+
+    func testHangLinesAreReadSeparately() {
+        let log = """
+        2026-09-24T10:00:00Z  HANG  main thread blocked for 1.40 s during sweeping 2 of 3
+        2026-09-24T10:01:00Z  ERROR  git failed
+        """
+        let hangs = Diagnostics.problems(in: log, kinds: ["HANG"])
+        XCTAssertEqual(hangs.map(\.message), ["main thread blocked for 1.40 s during sweeping 2 of 3"])
+    }
+
+    func testCommandLabelNamesTheRepositoryNotThePath() {
+        let label = Telemetry.label("/usr/bin/git", ["-C", "/Users/me/Code/app", "status", "--porcelain", "-uall"], cwd: nil)
+        XCTAssertEqual(label, "git status --porcelain · app")
+    }
+}
+
+final class TelemetryTests: XCTestCase {
+    func testWatchdogReportsABlockedMainThread() {
+        let caught = expectation(description: "hang reported")
+        caught.assertForOverFulfill = false
+        let telemetry = Telemetry { seconds, _ in
+            if seconds > 0.5 { caught.fulfill() }
+        }
+        telemetry.startWatchdog()
+        Thread.sleep(forTimeInterval: 1.2)
+        wait(for: [caught], timeout: 3)
+        telemetry.stopWatchdog()
+    }
+
+    func testCPUPercentComesFromTheSampleWindow() {
+        let start = Telemetry.Usage(date: Date(timeIntervalSince1970: 0), memory: 0, cpuSeconds: 1, threads: 1)
+        let end = Telemetry.Usage(date: Date(timeIntervalSince1970: 10), memory: 0, cpuSeconds: 1.5, threads: 1)
+        XCTAssertEqual(end.cpuPercent(since: start), 5, accuracy: 0.001)
+        XCTAssertEqual(end.cpuPercent(since: nil), 0)
+    }
+}
+
+final class CrashReportTests: XCTestCase {
+    private let url = URL(fileURLWithPath: "/tmp/Coppice Dev-2026-09-24-022056.ips")
+
+    private let report = """
+    {"app_name":"Coppice Dev","timestamp":"2026-09-24 02:20:56.00 +0500","app_version":"0.21-dev"}
+    {"exception":{"type":"EXC_CRASH","signal":"SIGABRT"},
+     "usedImages":[{"name":"CoreFoundation"},{"name":"libobjc.A.dylib"},{"name":"AppKit"},{"name":"SwiftUI"},{"name":"Coppice Dev"}],
+     "lastExceptionBacktrace":[
+       {"imageIndex":0,"symbol":"__exceptionPreprocess"},
+       {"imageIndex":1,"symbol":"objc_exception_throw"},
+       {"imageIndex":2,"symbol":"-[NSWindow _postWindowNeedsUpdateConstraints]"},
+       {"imageIndex":3,"symbol":"NSHostingView.setNeedsUpdate()"},
+       {"imageIndex":4,"symbol":"Coppice_main"}
+     ]}
+    """
+
+    func testParsesExceptionFramesAndTheLikelyFrame() throws {
+        let crash = try XCTUnwrap(CrashReports.parse(report, url: url, channel: .dev))
+        XCTAssertEqual(crash.kind, "EXC_CRASH · SIGABRT")
+        XCTAssertEqual(crash.version, "0.21-dev")
+        XCTAssertEqual(crash.frames.count, 5)
+        XCTAssertEqual(crash.headline, "-[NSWindow _postWindowNeedsUpdateConstraints]")
+        XCTAssertTrue(crash.frames[4].isApp)
+    }
+
+    func testLogSuppliesTheExceptionAndWhatHappenedBefore() throws {
+        var crash = try XCTUnwrap(CrashReports.parse(report, url: url, channel: .dev))
+        let log = CrashReports.entries(in: """
+        2026-09-23T21:20:50Z  remove with work checkout-api: 2 untracked files
+        2026-09-23T21:20:53Z  removed checkout-api → Trash (10.57 GB)
+        2026-09-23T21:20:54Z  CRASH  uncaught NSGenericException: The window has been marked as needing another pass.
+        CRASH  Coppice 0.21-dev stopped on SIGABRT.
+        """)
+        CrashReports.attach(log, to: &crash)
+        XCTAssertEqual(crash.kind, "NSGenericException")
+        XCTAssertEqual(crash.reason, "The window has been marked as needing another pass.")
+        XCTAssertEqual(
+            crash.before.map(\.text),
+            ["remove with work checkout-api: 2 untracked files", "removed checkout-api → Trash (10.57 GB)"]
+        )
+    }
+
+    func testSameCauseGroupsTogether() throws {
+        let first = try XCTUnwrap(CrashReports.parse(report, url: url, channel: .dev))
+        let second = try XCTUnwrap(CrashReports.parse(report, url: URL(fileURLWithPath: "/tmp/Coppice-2026-09-24.ips"), channel: .stable))
+        let groups = CrashReports.groups([first, second])
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups.first?.channels, "Dev 1 · Stable 1")
+    }
 }

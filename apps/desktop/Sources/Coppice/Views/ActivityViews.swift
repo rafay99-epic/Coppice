@@ -40,6 +40,7 @@ struct BannerView: View {
     let banner: Banner
     let onDismiss: () -> Void
 
+    @EnvironmentObject private var model: AppModel
     @State private var showingDetails = false
 
     var body: some View {
@@ -59,11 +60,17 @@ struct BannerView: View {
 
                 Spacer(minLength: Space.s)
 
-                Button("Open log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
-                    .buttonStyle(.plain)
-                    .fixedSize()
-                    .font(.uiCaption)
-                    .foregroundStyle(.secondary)
+                Group {
+                    if banner.opensCrashes {
+                        Button("View crash") { model.openCrashes() }
+                    } else {
+                        Button("Open log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
+                    }
+                }
+                .buttonStyle(.plain)
+                .fixedSize()
+                .font(.uiCaption)
+                .foregroundStyle(.secondary)
 
                 if !banner.details.isEmpty {
                     Button(showingDetails ? "Hide" : "Details") {

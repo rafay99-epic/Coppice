@@ -35,6 +35,7 @@ enum Shell {
         process.standardOutput = outPipe
         process.standardError = errPipe
 
+        let started = DispatchTime.now()
         do {
             try process.run()
         } catch {
@@ -73,6 +74,11 @@ enum Shell {
         let err = String(decoding: errData, as: UTF8.self)
         lock.unlock()
 
+        Telemetry.shared.record(
+            command: Telemetry.label(executable, arguments, cwd: cwd),
+            seconds: Double(DispatchTime.now().uptimeNanoseconds - started.uptimeNanoseconds) / 1_000_000_000,
+            status: process.terminationStatus
+        )
         return Result(status: process.terminationStatus, stdout: out, stderr: err)
     }
 }

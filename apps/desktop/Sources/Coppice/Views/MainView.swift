@@ -512,7 +512,7 @@ extension MainView {
                 .padding(.horizontal, Space.xl)
                 .padding(.top, Space.l)
             SettingsPaneView(pane: pane)
-                .frame(maxWidth: 680)
+                .frame(maxWidth: 1400)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }

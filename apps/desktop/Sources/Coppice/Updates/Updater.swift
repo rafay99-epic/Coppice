@@ -33,6 +33,8 @@ final class Updater: ObservableObject {
     private weak var settings: AppSettings?
     private static let checkInterval: TimeInterval = 6 * 3600
 
+    var nextCheck: Date? { timer?.fireDate }
+
     var isBusy: Bool {
         switch status {
         case .checking, .downloading, .installing: return true
