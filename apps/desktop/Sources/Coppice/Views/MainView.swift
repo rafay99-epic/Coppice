@@ -131,6 +131,7 @@ struct MainView: View {
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
+        .frame(minWidth: 360, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
         .background(.black)
         .toolbar { toolbar }
         .inspector(isPresented: inspectorVisible) {
