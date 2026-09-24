@@ -23,13 +23,11 @@ struct WorktreeScanner: @unchecked Sendable {
 
         for root in codeRoots {
             for candidate in children(of: root) {
-                if isRepository(candidate) {
-                    found.insert(candidate.resolvingSymlinksInPath().path)
+                if let repo = repository(at: candidate) {
+                    found.insert(repo)
                     continue
                 }
-                for nested in children(of: candidate) where isRepository(nested) {
-                    found.insert(nested.resolvingSymlinksInPath().path)
-                }
+                found.formUnion(children(of: candidate).compactMap(repository(at:)))
             }
         }
         for (_, root) in agentWorktreeRoots() {
@@ -67,8 +65,12 @@ struct WorktreeScanner: @unchecked Sendable {
         }
     }
 
-    private func isRepository(_ url: URL) -> Bool {
-        fileManager.fileExists(atPath: url.appending(path: ".git").path)
+    private func repository(at url: URL) -> String? {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.appending(path: ".git").path, isDirectory: &isDirectory) else {
+            return nil
+        }
+        return isDirectory.boolValue ? url.resolvingSymlinksInPath().path : parentRepository(ofWorktree: url.path)
     }
 
     func inventory() -> [Worktree] { scan().worktrees }

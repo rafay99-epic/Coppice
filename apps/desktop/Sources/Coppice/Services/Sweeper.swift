@@ -9,21 +9,25 @@ enum Sweeper {
     }
 
     struct Outcome: Sendable {
-        var freedBytes: Int64 = 0
+        var freed: [String: Int64] = [:]
         var removedPaths: [String] = []
         var skipped: [Item] = []
         var failures: [Item] = []
+        var trashed: URL?
 
+        var freedBytes: Int64 { freed.values.reduce(0, +) }
         var didAnything: Bool { !removedPaths.isEmpty }
         var hasProblems: Bool { !skipped.isEmpty || !failures.isEmpty }
     }
 
     struct Progress: Sendable, Equatable {
-        var completed: Int
-        var total: Int
-        var currentName: String
-        var freedBytes: Int64
+        let paths: [String]
+        var completed = 0
+        var freed: [String: Int64] = [:]
 
+        var total: Int { paths.count }
+        var current: String? { paths.indices.contains(completed) ? paths[completed] : nil }
+        var freedBytes: Int64 { freed.values.reduce(0, +) }
         var fraction: Double { total > 0 ? Double(completed) / Double(total) : 0 }
     }
 
@@ -36,23 +40,15 @@ enum Sweeper {
     ) -> Outcome {
         var outcome = Outcome()
         let holders = ProcessProbe.currentHolders()
-        let total = reports.count
-        var completed = 0
+        var progress = Progress(paths: reports.map(\.id))
         let knownSizes = Dictionary(
             reports.flatMap(\.artifacts).map { ($0.path, $0.bytes) },
             uniquingKeysWith: { first, _ in first }
         )
 
         for report in reports {
-            onProgress(
-                Progress(
-                    completed: completed,
-                    total: total,
-                    currentName: report.worktree.name,
-                    freedBytes: outcome.freedBytes
-                )
-            )
-            defer { completed += 1 }
+            onProgress(progress)
+            defer { progress.completed += 1 }
 
             let worktree = report.worktree
 
@@ -75,16 +71,18 @@ enum Sweeper {
                     ?? ArtifactScanner.allocatedSize(of: artifact.path, fileManager: fileManager)
                 do {
                     try fileManager.removeItem(atPath: artifact.path)
-                    outcome.freedBytes += size
+                    outcome.freed[worktree.path, default: 0] += size
                     outcome.removedPaths.append(artifact.path)
                     log("swept \(artifact.path) (\(Format.bytes(size)))")
+                    progress.freed = outcome.freed
+                    onProgress(progress)
                 } catch {
                     outcome.failures.append(Item(path: artifact.path, reason: error.localizedDescription))
                     log("sweep failed \(artifact.path): \(error.localizedDescription)")
                 }
             }
         }
-        onProgress(Progress(completed: total, total: total, currentName: "", freedBytes: outcome.freedBytes))
+        onProgress(progress)
         return outcome
     }
 
@@ -155,8 +153,10 @@ enum Sweeper {
         let size = ArtifactScanner.allocatedSize(of: worktree.path, fileManager: fileManager)
 
         do {
-            try fileManager.trashItem(at: URL(fileURLWithPath: worktree.path), resultingItemURL: nil)
-            outcome.freedBytes += size
+            var trashed: NSURL?
+            try fileManager.trashItem(at: URL(fileURLWithPath: worktree.path), resultingItemURL: &trashed)
+            outcome.freed[worktree.path] = size
+            outcome.trashed = trashed as URL?
             outcome.removedPaths.append(worktree.path)
             log("removed \(worktree.path) → Trash (\(Format.bytes(size)))")
         } catch {

@@ -20,9 +20,7 @@ struct ActivityBar: View {
                 }
 
                 if let fraction = activity.fraction {
-                    ProgressView(value: fraction)
-                        .progressViewStyle(.linear)
-                        .tint(.white)
+                    ProgressLine(value: fraction, height: 2)
                 }
 
                 if let detail = activity.detail {
@@ -61,13 +59,11 @@ struct BannerView: View {
 
                 Spacer(minLength: Space.s)
 
-                if banner.kind != .success {
-                    Button("Open log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
-                        .buttonStyle(.plain)
-                        .fixedSize()
-                        .font(.uiCaption)
-                        .foregroundStyle(.secondary)
-                }
+                Button("Open log") { NSWorkspace.shared.open(Log.shared.logFileURL) }
+                    .buttonStyle(.plain)
+                    .fixedSize()
+                    .font(.uiCaption)
+                    .foregroundStyle(.secondary)
 
                 if !banner.details.isEmpty {
                     Button(showingDetails ? "Hide" : "Details") {
@@ -115,5 +111,55 @@ struct BannerView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.white.opacity(0.06), in: .rect(cornerRadius: 8))
         .transition(.move(edge: .top).combined(with: .opacity))
+    }
+}
+
+struct StatusLine: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        let parts = self.parts
+        return HStack(spacing: Space.xs) {
+            Text("\(Text(parts.lead).foregroundStyle(.primary).fontWeight(.medium))\(parts.rest)")
+                .numeric(parts.lead + parts.rest)
+            if !model.isWorking, let follow = model.receipt?.follow {
+                Text("·")
+                Button(follow.title) { follow.open() }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.primary)
+                    .underline()
+            }
+        }
+        .font(.uiCallout)
+        .foregroundStyle(.secondary)
+        .monospacedDigit()
+        .lineLimit(1)
+    }
+
+    private var parts: (lead: String, rest: String) {
+        if model.activity.isMutating {
+            return (model.activity.title, model.activity.freedSoFar.map { " · \(Format.bytes($0)) freed" } ?? "")
+        }
+        if let receipt = model.receipt {
+            return (receipt.headline, receipt.detail.map { " \($0)" } ?? "")
+        }
+        if model.isScanning, model.visibleReports.isEmpty { return ("", "Scanning…") }
+        return ("", "\(model.visibleReports.count) worktrees · \(Format.bytes(model.totalBytes))")
+    }
+}
+
+extension Receipt.Follow {
+    var title: String {
+        switch self {
+        case .log: return "Show log"
+        case .trash: return "Show in Trash"
+        }
+    }
+
+    func open() {
+        switch self {
+        case .log: NSWorkspace.shared.open(Log.shared.logFileURL)
+        case .trash(let url): NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
     }
 }

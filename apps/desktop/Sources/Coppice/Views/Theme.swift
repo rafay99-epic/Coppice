@@ -114,6 +114,54 @@ extension ButtonStyle where Self == QuietButtonStyle {
     static var quiet: QuietButtonStyle { QuietButtonStyle() }
 }
 
+struct MonoToggleStyle: ToggleStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button { configuration.isOn.toggle() } label: {
+            HStack(spacing: Space.m) {
+                configuration.label
+                Spacer(minLength: Space.m)
+                Capsule()
+                    .fill(configuration.isOn ? Color.white : Color.white.opacity(0.16))
+                    .frame(width: 30, height: 18)
+                    .overlay(alignment: configuration.isOn ? .trailing : .leading) {
+                        Circle()
+                            .fill(configuration.isOn ? Color.black : Color.white)
+                            .padding(2)
+                    }
+                    .animation(.snappy(duration: 0.18), value: configuration.isOn)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .opacity(isEnabled ? 1 : 0.35)
+        .accessibilityRepresentation {
+            Toggle(isOn: configuration.$isOn) { configuration.label }
+        }
+    }
+}
+
+extension ToggleStyle where Self == MonoToggleStyle {
+    static var mono: MonoToggleStyle { MonoToggleStyle() }
+}
+
+struct ProgressLine: View {
+    let value: Double
+    var height: CGFloat = 1
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Rectangle().fill(.white.opacity(0.12))
+            Rectangle().fill(.white).scaleEffect(x: min(max(value, 0), 1), anchor: .leading)
+        }
+        .frame(height: height)
+        .animation(.smooth, value: value)
+        .accessibilityElement()
+        .accessibilityValue("\(Int(min(max(value, 0), 1) * 100)) percent")
+    }
+}
+
 extension ToolbarContent {
     @ToolbarContentBuilder
     func withoutGlass() -> some ToolbarContent {
