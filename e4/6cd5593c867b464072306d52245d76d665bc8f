@@ -1,0 +1,54 @@
+apps/desktop/Sources/Coppice/Services/Telemetry.swift
+  s_b5916b1170314e::t_8538a6c9182e6e 131-132
+  s_b5916b1170314e::t_99fae467a32517 64,79-84,209
+  s_b5916b1170314e::t_28113bf52d2bfb 1-63,65-78,85-130,133-208,210-260
+apps/desktop/Sources/Coppice/Views/DiagnosticsSettings.swift
+  s_b5916b1170314e::t_d525d68b42c61b 18-19,23-24,29,32-34,40,44,58-59,64-68,71-78,87-92,94-95,97-100,107-119,123-129,131,135-209,213-228,230-269,278,285-312
+  s_b5916b1170314e::t_8538a6c9182e6e 69-70,79-81,334-335,350-351,356-357
+  s_b5916b1170314e::t_ae5730ae099ccd 270-277,279-284
+  s_b5916b1170314e::t_4279435a0b06ce 313-333,336-349,352-355,359-361
+apps/desktop/Sources/Coppice/Services/CrashReports.swift
+  s_b5916b1170314e::t_4af6d874b26f07 13,20,28-31,33-34,65-69,113-114,123,132-139
+  s_b5916b1170314e::t_5dd63178502dab 1-12,14-19,21-27,32,35-64,70-112,115-122,124-131,140-246
+apps/desktop/Sources/Coppice/Services/Shell.swift
+  s_b5916b1170314e::t_aa434b81148b8f 38,77-81
+apps/desktop/Tests/CoppiceTests/ParsingTests.swift
+  s_b5916b1170314e::t_99fae467a32517 321-341
+  s_b5916b1170314e::t_8538a6c9182e6e 378-381
+  s_b5916b1170314e::t_6dad240fd86fe7 305-320,342-377,382-390
+apps/desktop/Sources/Coppice/Views/ActivityViews.swift
+  s_b5916b1170314e::t_c362b8498a1d87 43,63-73
+apps/desktop/Sources/Coppice/Models/AppModel.swift
+  s_b5916b1170314e::t_e1c5a459a1c28f 84,97-99,107,196-197,207,213,248,251,253-254,256-266,268,270-272,276-277,279,299,379,382,575-613
+apps/desktop/Sources/Coppice/Services/DiagnosticsExport.swift
+  s_b5916b1170314e::t_f8249149f622d7 11-14
+  s_b5916b1170314e::t_1f4ba96fd23f5f 24,31
+  s_b5916b1170314e::t_5c99b027708815 1-10,15-23,25-30,32-53
+apps/desktop/Sources/Coppice/App/CoppiceApp.swift
+  s_b5916b1170314e::t_c362b8498a1d87 114-125
+apps/desktop/Sources/Coppice/Services/AppSettings.swift
+  s_b5916b1170314e::t_5c99b027708815 69
+apps/desktop/Sources/Coppice/Views/DiagnosticsParts.swift
+  s_b5916b1170314e::t_13d9f9745f5816 50
+  s_b5916b1170314e::t_113c18cba8c176 1-49,51-188
+apps/desktop/Sources/Coppice/Views/CrashesSheet.swift
+  s_b5916b1170314e::t_fb04f69ee60950 1-185
+apps/desktop/Sources/Coppice/Updates/Updater.swift
+  s_b5916b1170314e::t_c362b8498a1d87 36-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e46cd5593c867b464072306d52245d76d665bc8f",
+  "prompts": {},
+  "sessions": {
+    "s_b5916b1170314e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "88b5662d-d049-46be-a63d-862d094fbbfe",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
