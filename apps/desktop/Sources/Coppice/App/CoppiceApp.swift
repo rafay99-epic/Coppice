@@ -29,7 +29,7 @@ struct CoppiceApp: App {
                 .environmentObject(model)
                 .environmentObject(settings)
                 .environmentObject(updater)
-                .frame(minWidth: 900, minHeight: 560)
+                .frame(minWidth: 940, minHeight: 560)
                 .preferredColorScheme(.dark)
                 .tint(.white)
                 .task { updater.startAutomaticChecks(settings: settings) }
