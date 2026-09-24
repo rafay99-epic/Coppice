@@ -38,25 +38,52 @@ struct SettingsForm<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        Form { content }
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-            .background(.black)
-            .contentMargins(.horizontal, Space.xl, for: .scrollContent)
-            .contentMargins(.vertical, Space.l, for: .scrollContent)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.xxl) { content }
+                .padding(.horizontal, Space.xl)
+                .padding(.vertical, Space.l)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(.black)
+        .toggleStyle(.mono)
+        .buttonStyle(.quiet)
+        .labeledContentStyle(SettingsRowStyle())
     }
 }
 
-struct SettingsHeader: View {
+struct SettingsSection<Content: View>: View {
     let title: String
+    var footer: String?
+    @ViewBuilder let content: Content
 
     var body: some View {
-        Text(title)
-            .font(.heading(17))
-            .foregroundStyle(.primary)
-            .textCase(nil)
-            .padding(.top, Space.s)
-            .padding(.bottom, Space.xs)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.heading(17))
+                .padding(.bottom, Space.xs)
+            Group(subviews: content) { rows in
+                ForEach(rows) { row in
+                    row.padding(.vertical, Space.s)
+                    if row.id != rows.last?.id {
+                        Divider().opacity(0.5)
+                    }
+                }
+            }
+            if let footer {
+                Hint(footer).padding(.top, Space.xs)
+            }
+        }
+    }
+}
+
+struct SettingsRowStyle: LabeledContentStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: Space.m) {
+            configuration.label
+            Spacer(minLength: Space.m)
+            configuration.content
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -79,7 +106,7 @@ private struct GeneralSettings: View {
 
     var body: some View {
         SettingsForm {
-            Section {
+            SettingsSection(title: "Menu bar", footer: "Dock changes apply the next time Coppice opens.") {
                 Toggle("Show reclaimable space", isOn: $settings.showSizeInMenuBar)
                 LabeledContent("Show from") {
                     HStack(spacing: Space.m) {
@@ -93,13 +120,9 @@ private struct GeneralSettings: View {
                 }
                 .disabled(!settings.showSizeInMenuBar)
                 Toggle("Show Coppice in the Dock", isOn: $settings.showsDockIcon)
-            } header: {
-                SettingsHeader(title: "Menu bar")
-            } footer: {
-                Hint("Dock changes apply the next time Coppice opens.")
             }
 
-            Section {
+            SettingsSection(title: "Safety") {
                 Toggle("Save .env files before removing", isOn: $settings.rescueIgnoredConfig)
                 LabeledContent("Saved to") {
                     Button(settings.rescueDirectory.lastPathComponent) {
@@ -112,11 +135,9 @@ private struct GeneralSettings: View {
                     .buttonStyle(.link)
                     .foregroundStyle(.primary)
                 }
-            } header: {
-                SettingsHeader(title: "Safety")
             }
 
-            Section {
+            SettingsSection(title: "Updates") {
                 Toggle("Check for updates automatically", isOn: $settings.autoUpdateCheck)
                 LabeledContent("Status") {
                     HStack(spacing: Space.m) {
@@ -127,8 +148,6 @@ private struct GeneralSettings: View {
                             .disabled(updater.isBusy || !Channel.current.updatesEnabled)
                     }
                 }
-            } header: {
-                SettingsHeader(title: "Updates")
             }
         }
     }
@@ -140,7 +159,7 @@ private struct ScanningSettings: View {
 
     var body: some View {
         SettingsForm {
-            Section {
+            SettingsSection(title: "Code folders", footer: "Agent worktree folders are always scanned.") {
                 ForEach(settings.codeRoots, id: \.self) { root in
                     HStack(spacing: Space.m) {
                         Image(systemName: "folder")
@@ -162,23 +181,17 @@ private struct ScanningSettings: View {
                     }
                 }
                 Button("Add folder…") { addRoot() }
-            } header: {
-                SettingsHeader(title: "Code folders")
-            } footer: {
-                Hint("Agent worktree folders are always scanned.")
             }
 
-            Section {
+            SettingsSection(title: "Agents") {
                 ForEach(Harness.allCases, id: \.self) { harness in
                     Toggle(isOn: harnessBinding(harness)) {
                         Label(harness.displayName, systemImage: harness.symbol)
                     }
                 }
-            } header: {
-                SettingsHeader(title: "Agents")
             }
 
-            Section {
+            SettingsSection(title: "Pull requests", footer: "A merged pull request marks a branch as finished.") {
                 Toggle("Check pull request status", isOn: $settings.checkPullRequests)
                     .disabled(!model.canCheckPullRequests)
                 if model.canCheckPullRequests {
@@ -189,13 +202,9 @@ private struct ScanningSettings: View {
                 } else {
                     Hint("Needs the GitHub CLI (gh).")
                 }
-            } header: {
-                SettingsHeader(title: "Pull requests")
-            } footer: {
-                Hint("A merged pull request marks a branch as finished.")
             }
 
-            Section {
+            SettingsSection(title: "Sessions") {
                 LabeledContent("Recent session") {
                     HStack(spacing: Space.m) {
                         Slider(value: $settings.recentSessionHours, in: 1...168, step: 1)
@@ -209,8 +218,6 @@ private struct ScanningSettings: View {
                 LabeledContent("Scan") {
                     Button("Rescan now") { model.settingsChanged() }
                 }
-            } header: {
-                SettingsHeader(title: "Sessions")
             }
         }
     }

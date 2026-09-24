@@ -81,6 +81,7 @@ struct MenuBarView: View {
     }
 
     private var subtitle: String {
+        if let receipt = model.receipt { return [receipt.headline, receipt.detail].compactMap { $0 }.joined(separator: " ") }
         if model.visibleReports.isEmpty { return "No worktrees found yet" }
         let repos = model.groups.count
         return "\(model.visibleReports.count) worktrees in \(repos) repo\(repos == 1 ? "" : "s")"

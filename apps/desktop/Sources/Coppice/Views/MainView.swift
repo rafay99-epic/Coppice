@@ -138,17 +138,10 @@ struct MainView: View {
             InspectorView()
                 .inspectorColumnWidth(min: 290, ideal: 330, max: 420)
         }
-        .confirmationDialog(
-            "Sweep build artifacts in \(model.sweepCandidates.count) worktrees?",
-            isPresented: $model.confirmingSweep,
-            titleVisibility: .visible
-        ) {
-            Button("Sweep \(Format.bytes(model.reclaimableBytes))") {
-                Task { await model.sweep(model.sweepCandidates) }
+        .sheet(isPresented: $model.confirmingSweep) {
+            SweepSheet(targets: model.sweepCandidates) { targets in
+                Task { await model.sweep(targets) }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Source, git history and local config are untouched. An install command rebuilds everything this removes.")
         }
     }
 
@@ -182,13 +175,6 @@ struct MainView: View {
                 .padding(.top, Space.m)
             }
 
-            if model.activity.isMutating {
-                ActivityBar(activity: model.activity)
-                    .padding(.horizontal, Space.xl)
-                    .padding(.vertical, Space.m)
-                Divider()
-            }
-
             header
 
             if filteredGroups.isEmpty {
@@ -200,7 +186,6 @@ struct MainView: View {
         }
         .background(.black)
         .animation(.smooth, value: model.banner)
-        .animation(.smooth, value: model.activity.isMutating)
     }
 
     private var visibleFailures: Banner? {
@@ -231,7 +216,7 @@ struct MainView: View {
                     NSWorkspace.shared.open(url)
                 }
             }
-            .controlSize(.small)
+            .buttonStyle(.quiet)
             Button {
                 dismissedDiskAccess = true
             } label: {
@@ -258,11 +243,8 @@ struct MainView: View {
                 headerActions
             }
             HStack(spacing: Space.m) {
-                Text(subtitle)
-                    .font(.uiCallout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .numeric(subtitle)
+                StatusLine()
+                    .layoutPriority(1)
                 Spacer(minLength: Space.m)
                 activityStatus
                     .opacity(model.isScanning || model.isMeasuring ? 1 : 0)
@@ -302,12 +284,14 @@ struct MainView: View {
                     .listRowInsets(EdgeInsets(top: 0, leading: Space.xl, bottom: 0, trailing: Space.xl))
                     ForEach(group.reports) { report in
                         let selected = model.selection == report.id
-                        WorktreeRow(report: report)
+                        let status = model.rowStatus(report)
+                        WorktreeRow(report: report, status: status)
                             .id(report.id)
                             .contentShape(.rect)
                             .onTapGesture { select(report.id) }
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel(report.accessibilitySummary)
+                            .accessibilityValue(status.tag ?? "")
                             .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
                             .accessibilityAction { select(report.id) }
                             .listRowInsets(EdgeInsets(top: 0, leading: Space.xl, bottom: 0, trailing: Space.xl))
@@ -389,12 +373,6 @@ struct MainView: View {
             }
         }
         .padding(Space.xxl)
-    }
-
-    private var subtitle: String {
-        if model.isScanning, model.visibleReports.isEmpty { return "Scanning…" }
-        let count = model.visibleReports.count
-        return "\(count) worktrees · \(Format.bytes(model.totalBytes))"
     }
 
     private var filteredGroups: [RepoGroup] {
@@ -620,14 +598,25 @@ struct SidebarRow: View {
 
 struct WorktreeRow: View {
     let report: WorktreeReport
+    var status = RowStatus()
 
     var body: some View {
-        HStack(spacing: Space.l) {
+        let artifactBytes = report.artifactBytes - status.freedInFlight
+        let totalBytes = report.totalBytes - status.freedInFlight
+        return HStack(spacing: Space.l) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(report.worktree.name)
-                    .font(.ui.weight(.medium))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                HStack(alignment: .firstTextBaseline, spacing: Space.s) {
+                    Text(report.worktree.name)
+                        .font(.ui.weight(.medium))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if let tag = status.tag {
+                        Text(tag)
+                            .font(.uiCaption.monospaced())
+                            .foregroundStyle(.tertiary)
+                            .fixedSize()
+                    }
+                }
                 Text(report.worktree.displayBranch)
                     .font(.uiCaption)
                     .foregroundStyle(.secondary)
@@ -637,24 +626,39 @@ struct WorktreeRow: View {
 
             Spacer(minLength: Space.s)
 
-            if report.artifactBytes > 0 {
-                Text(Format.compactBytes(report.artifactBytes))
+            if artifactBytes > 0 {
+                Text(Format.compactBytes(artifactBytes))
                     .font(.uiCaption)
                     .monospacedDigit()
                     .foregroundStyle(.tertiary)
-                    .numeric(report.artifactBytes)
+                    .numeric(artifactBytes)
                     .help("Build output a sweep frees")
             }
 
-            Text(report.measured ? Format.compactBytes(report.totalBytes) : "…")
-                .monospacedDigit()
-                .numeric(report.totalBytes)
-                .foregroundStyle(report.measured ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
-                .frame(width: 72, alignment: .trailing)
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(report.measured ? Format.compactBytes(totalBytes) : "…")
+                    .numeric(totalBytes)
+                    .foregroundStyle(report.measured ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+                if status.freed > 0 {
+                    Text("\u{2212}\(Format.compactBytes(status.freed))")
+                        .font(.uiCaption)
+                        .foregroundStyle(.secondary)
+                        .numeric(status.freed)
+                }
+            }
+            .monospacedDigit()
+            .frame(width: 72, alignment: .trailing)
 
             VerdictBadge(verdict: report.verdict)
                 .frame(width: 96, alignment: .leading)
         }
+        .opacity(status.dimmed ? 0.45 : 1)
         .padding(.vertical, Space.m)
+        .overlay(alignment: .bottom) {
+            if let progress = status.progress {
+                ProgressLine(value: progress)
+            }
+        }
+        .animation(.smooth, value: status)
     }
 }

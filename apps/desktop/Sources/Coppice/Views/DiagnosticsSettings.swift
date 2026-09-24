@@ -69,7 +69,7 @@ struct DiagnosticsSettings: View {
 
     var body: some View {
         SettingsForm {
-            Section {
+            SettingsSection(title: "Activity log", footer: "Every scan, sweep and removal is written here, along with any crash.") {
                 LabeledContent("File") {
                     HStack(spacing: Space.m) {
                         Text("\(logURL.lastPathComponent) · \(Format.bytes(diagnostics.logBytes))")
@@ -79,13 +79,9 @@ struct DiagnosticsSettings: View {
                         Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([logURL]) }
                     }
                 }
-            } header: {
-                SettingsHeader(title: "Activity log")
-            } footer: {
-                Hint("Every scan, sweep and removal is written here, along with any crash.")
             }
 
-            Section {
+            SettingsSection(title: "Recent problems") {
                 if diagnostics.problems.isEmpty {
                     Text("None recorded")
                         .foregroundStyle(.secondary)
@@ -101,11 +97,9 @@ struct DiagnosticsSettings: View {
                         }
                     }
                 }
-            } header: {
-                SettingsHeader(title: "Recent problems")
             }
 
-            Section {
+            SettingsSection(title: "Environment") {
                 LabeledContent("Coppice", value: "\(Channel.current.displayName) \(Updater.currentVersion)")
                 LabeledContent("macOS", value: ProcessInfo.processInfo.operatingSystemVersionString)
                 LabeledContent("git", value: diagnostics.git)
@@ -118,8 +112,6 @@ struct DiagnosticsSettings: View {
                         copied = true
                     }
                 }
-            } header: {
-                SettingsHeader(title: "Environment")
             }
         }
         .task {

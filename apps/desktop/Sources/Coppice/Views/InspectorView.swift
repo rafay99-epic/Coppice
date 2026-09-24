@@ -301,8 +301,7 @@ struct RemoveSheet: View {
                         .truncationMode(.middle)
                 }
                 Toggle("Delete branch too", isOn: $deleteBranch)
-                    .toggleStyle(.switch)
-                    .tint(.white)
+                    .toggleStyle(.mono)
                     .disabled(report.worktree.branch == nil)
                 if deleteBranch, holdsCommits {
                     Text("Its commits are only on this branch. Git keeps the branch unless it is merged.")
