@@ -81,6 +81,7 @@ struct Banner: Identifiable, Equatable {
     let title: String
     let message: String
     var details: [Sweeper.Item] = []
+    var opensCrashes = false
 }
 
 struct RepoGroup {
@@ -93,7 +94,9 @@ struct RepoGroup {
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var reports: [WorktreeReport] = []
-    @Published private(set) var activity: Activity = .idle
+    @Published private(set) var activity: Activity = .idle {
+        didSet { Telemetry.shared.setActivity(activity.title) }
+    }
     @Published private(set) var lastScan: Date?
     @Published private(set) var detectedHarnesses: [Harness] = []
     @Published var banner: Banner?
@@ -101,6 +104,7 @@ final class AppModel: ObservableObject {
     @Published var selection: String?
     @Published var confirmingSweep = false
     @Published var settingsPane: SettingsPane?
+    @Published var showingCrashes = false
     @Published private(set) var unreadableRoots: [String] = []
     @Published private(set) var scanFailures: [Sweeper.Item] = []
 
@@ -189,6 +193,8 @@ final class AppModel: ObservableObject {
     func start() {
         guard !hasStarted else { return }
         hasStarted = true
+        Telemetry.shared.startSampling()
+        if let previous = LaunchRecord.begin() { reportCrash(since: previous) }
         rescan()
         restartWatcher()
     }
@@ -198,11 +204,13 @@ final class AppModel: ObservableObject {
         let scanner = self.scanner
         var paths = scanner.agentWorktreeRoots().map(\.root.path)
         paths += settings.codeRoots.map(\.path).filter { FileManager.default.fileExists(atPath: $0) }
+        Telemetry.shared.watching(folders: paths.count)
         guard !paths.isEmpty else { return }
 
         let agentRoots = scanner.agentWorktreeRoots().map(\.root.path)
         let isRelevant: @Sendable (String) -> Bool = { ScanScheduler.isWorktreeChange($0, agentRoots: agentRoots) }
         watcher = DirectoryWatcher(paths: paths, isRelevant: isRelevant) { [weak self] in
+            Telemetry.shared.noticedChange()
             Task { @MainActor in self?.requestScan(automatic: true) }
         }
         watcher?.start()
@@ -237,35 +245,38 @@ final class AppModel: ObservableObject {
         let scanner = self.scanner
         let merged = Set(reports.filter(\.mergedAtHead).map(\.id))
         scanTask = Task { [weak self] in
-            let (fresh, unreadable, failures) = await Task.detached(priority: .utility) {
-                () -> ([WorktreeReport], [String], [Sweeper.Item]) in
+            let output = await Task.detached(priority: .utility) { () -> ScanOutput in
                 guard FileManager.default.isExecutableFile(atPath: Git.executable) else {
                     Log.shared.error("git not found at \(Git.executable)")
-                    return ([], [], [Sweeper.Item(path: Git.executable, reason: "Install the Xcode Command Line Tools")])
+                    return ScanOutput(failures: [Sweeper.Item(path: Git.executable, reason: "Install the Xcode Command Line Tools")])
                 }
+                let commandsBefore = Telemetry.shared.commands
+                var clock = PhaseClock()
                 let files = FileManager.default
-                let unreadable = (scanner.codeRoots.map(\.path) + scanner.agentWorktreeRoots().map(\.root.path))
-                    .filter { files.fileExists(atPath: $0) && (try? files.contentsOfDirectory(atPath: $0)) == nil }
-                let holders = ProcessProbe.currentHolders()
-                let inventory = scanner.scan()
-                let reports = inventory.worktrees.map { worktree in
-                    WorktreeReport(
-                        worktree: worktree,
-                        verdict: scanner.verdict(
-                            for: worktree,
-                            holders: holders,
-                            prMerged: merged.contains(worktree.path)
-                        )
-                    )
+                let unreadable = clock.measure("Check folders") {
+                    (scanner.codeRoots.map(\.path) + scanner.agentWorktreeRoots().map(\.root.path))
+                        .filter { files.fileExists(atPath: $0) && (try? files.contentsOfDirectory(atPath: $0)) == nil }
                 }
-                return (reports, unreadable, inventory.failures)
+                let holders = clock.measure("Process probe") { ProcessProbe.currentHolders() }
+                let inventory = clock.measure("Find worktrees") { scanner.scan() }
+                let reports = clock.measure("Status checks \u{00d7}\(inventory.worktrees.count)") {
+                    inventory.worktrees.map { worktree in
+                        WorktreeReport(
+                            worktree: worktree,
+                            verdict: scanner.verdict(for: worktree, holders: holders, prMerged: merged.contains(worktree.path))
+                        )
+                    }
+                }
+                let timing = Telemetry.Scan(date: Date(), phases: clock.phases, commands: Telemetry.shared.commands - commandsBefore)
+                Telemetry.shared.record(scan: timing)
+                return ScanOutput(reports: reports, unreadable: unreadable, failures: inventory.failures, timing: timing)
             }.value
 
             guard !Task.isCancelled, let self else { return }
-            self.unreadableRoots = unreadable
-            self.scanFailures = failures
+            self.unreadableRoots = output.unreadable
+            self.scanFailures = output.failures
             let previous = Dictionary(uniqueKeysWithValues: self.reports.map { ($0.id, $0) })
-            self.reports = fresh.map { report in
+            self.reports = output.reports.map { report in
                 guard let old = previous[report.id] else { return report }
                 var merged = report
                 merged.pullRequest = old.pullRequest
@@ -285,6 +296,7 @@ final class AppModel: ObservableObject {
             Log.shared.write(
                 "scan: \(self.visibleReports.count) worktrees, "
                 + "\(self.hasWorkCount) with work, \(self.groups.count) repos"
+                + (output.timing.map { " in \(Telemetry.format($0.seconds)), \($0.commands) commands" } ?? "")
             )
             self.measureSizes()
             let repos = Set(self.reports.map(\.worktree.repoPath))
@@ -364,8 +376,10 @@ final class AppModel: ObservableObject {
         guard !targets.isEmpty else { isMeasuring = false; return }
 
         isMeasuring = true
+        let started = Date()
         measureTask = Task { [weak self] in
             defer { if !Task.isCancelled { self?.isMeasuring = false } }
+            defer { if !Task.isCancelled { Telemetry.shared.record(sizing: Date().timeIntervalSince(started), count: targets.count) } }
             for path in targets {
                 if Task.isCancelled { return }
                 let measurement = await Task.detached(priority: .background) {
@@ -556,5 +570,44 @@ extension Banner {
             message: parts.joined(separator: ", ") + (outcome.didAnything ? ". Everything else was removed." : "."),
             details: outcome.failures + outcome.skipped
         )
+    }
+}
+
+private struct ScanOutput: Sendable {
+    var reports: [WorktreeReport] = []
+    var unreadable: [String] = []
+    var failures: [Sweeper.Item] = []
+    var timing: Telemetry.Scan?
+}
+
+extension AppModel {
+    var nextAutomaticScan: Date? {
+        scheduler.lastFinished.map { $0.addingTimeInterval(scheduler.minimumInterval) }
+    }
+
+    var nextPullRequestCheck: Date? {
+        lastPullRequestFetch.map { $0.addingTimeInterval(Self.pullRequestRefreshInterval) }
+    }
+
+    func openCrashes() {
+        showingCrashes = true
+        openSettings(.diagnostics)
+    }
+
+    func reportCrash(since previous: Date) {
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            let crash = await Task.detached(priority: .utility) {
+                CrashReports.load(since: previous, limit: 5).first { $0.channel == .current }
+            }.value
+            guard let self, let crash, self.banner == nil else { return }
+            Log.shared.write("last run crashed at \(crash.date.formatted()): \(crash.kind)")
+            self.banner = Banner(
+                kind: .failure,
+                title: "\(Channel.current.displayName) quit unexpectedly at \(crash.date.formatted(date: .omitted, time: .shortened))",
+                message: crash.before.last.map { "Right before: \($0.text)" } ?? "The crash report is saved.",
+                opensCrashes: true
+            )
+        }
     }
 }
