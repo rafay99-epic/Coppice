@@ -30,7 +30,7 @@ Coppice updates itself after that. To test upcoming changes, install the Nightly
 brew install --cask rafay99-epic/apps/coppice-nightly
 ```
 
-You can also download the [`.dmg`](https://github.com/rafay99-epic/Coppice/releases/latest/download/Coppice.dmg). It is signed and notarized by Apple, so it opens like any other app.
+You can also download the [`.dmg`](https://github.com/rafay99-epic/Coppice/releases/latest/download/Coppice.dmg). It is signed with a Developer ID and notarized by Apple, so it opens like any other app.
 
 ## Requirements
 
