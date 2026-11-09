@@ -274,8 +274,7 @@ function Install() {
           <a href={DMG} className="link text-label">
             .dmg
           </a>
-          . It is not notarized, so right-click and choose Open the first time. Coppice
-          updates itself after that.
+          , signed and notarized by Apple. Coppice updates itself after that.
         </p>
         <p className="reveal text-label-2" data-grow>
           Open source under MIT. Read every rule it follows on{" "}
